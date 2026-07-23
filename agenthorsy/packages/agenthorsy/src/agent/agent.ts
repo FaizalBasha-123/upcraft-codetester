@@ -240,6 +240,37 @@ const layer = Layer.effect(
             ),
             options: {},
           },
+          dynamic_persona: {
+            name: "dynamic_persona",
+            description:
+              "Autonomous agent that handles full lifecycle: plan → build → validate → merge. Starts in plan mode, explores codebase, designs approach, then switches to build mode to execute.",
+            options: {},
+            permission: Permission.merge(
+              defaults,
+              Permission.fromConfig({
+                question: "allow",
+                plan_exit: "allow",
+                switch_mode: "allow",
+                validate_task: "allow",
+                merge_worktree: "allow",
+                task: {
+                  explore: "allow",
+                  general: "allow",
+                },
+                external_directory: {
+                  [path.join(Global.Path.data, "plans", "*")]: "allow",
+                },
+                edit: {
+                  "*": "deny",
+                  [path.join(".agenthorsy", "plans", "*.md")]: "allow",
+                  [path.relative(ctx.worktree, path.join(Global.Path.data, "plans", "*.md"))]: "allow",
+                },
+              }),
+              user,
+            ),
+            mode: "primary",
+            native: true,
+          },
           title: {
             name: "title",
             mode: "primary",
