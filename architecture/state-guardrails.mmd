@@ -1,0 +1,105 @@
+flowchart TB
+    subgraph SessionState["SESSION STATE (session.json)"]
+        S1["Persisted per workspace<br/>./workspaces/<sessionId>/session.json"]
+        S2["Contains:<br/>• Scope: vulnClasses, exploit flag<br/>• Metrics: per-agent cost, duration<br/>• Status: completed agents<br/>• Auth: optional auth-state.json"]
+        S3["persistOrValidateRunScope()<br/>first-run: save, resume: validate match"]
+    end
+
+    subgraph GitCheckpoints["GIT CHECKPOINTING (deliverables git repo)"]
+        G1["INIT<br/>initDeliverableGit()<br/>git init + empty commit<br/>'📍 Initial deliverables checkpoint'"]
+        G2["PRE-AGENT CHECKPOINT<br/>git add -A + commit<br/>captures state before agent runs"]
+        G3["POST-AGENT SUCCESS<br/>git commit<br/>captures checkpoint hash"]
+        G4["POST-AGENT FAILURE<br/>git reset --hard + clean -fd<br/>rollback to pre-agent state"]
+        G5["RESUME RESTORE<br/>restoreGitCheckpoint()<br/>git reset --hard + clean -fd<br/>delete partial deliverables"]
+    end
+
+    subgraph ResumeFlow["RESUME WORKFLOW"]
+        R1["loadResumeState()<br/>1. Validate workspace exists<br/>2. Parse session.json<br/>3. Validate URL matches<br/>4. Cross-check deliverables on disk<br/>5. Collect git checkpoints"]
+        R2{"resumeState.loaded<br/>&& valid?"}
+        R3["restoreGitCheckpoint()<br/>git reset to latest hash<br/>clean untracked files"]
+        R4["All expected agents<br/>already complete?"]
+        R5["Short-circuit: return<br/>status=completed immediately"]
+        R6["recordResumeAttempt()<br/>audit log resume with<br/>checkpoint hash + new workflowId"]
+        R7["Resume pipeline from<br/>first incomplete agent"]
+    end
+
+    subgraph QueueGuardrails["QUEUE VALIDATION PIPELINE"]
+        Q1["validateQueueSafe(vulnType, sourceDir)"]
+        Q2["1. createPaths: resolve filenames<br/>from VULN_TYPE_CONFIG"]
+        Q3["2. checkFileExistence:<br/>deliverable + queue on disk?"]
+        Q4{"3. validateExistenceRules"}
+        Q5["Both exist → continue"]
+        Q6["Neither → retryable: analysis never ran"]
+        Q7["Only queue → retryable: deliverable missing"]
+        Q8["Only deliverable → retryable: queue file missing"]
+        Q9["4. validateQueueContent:<br/>parse JSON, check vulnerabilities[]"]
+        Q10{"vulnerabilities<br/>length > 0?"}
+        Q11["5. shouldExploit = true"]
+        Q12["5. shouldExploit = false"]
+    end
+
+    subgraph ExploitGuardrail["EXPLOIT ID GUARDRAIL"]
+        EG1["runExploitAgentWithCollector()<br/>reads exploitation queue"""
+        EG2["Extracts validIds: Set<string><br/>from queue.json"]
+        EG3["Creates exploit collector with<br/>{ vulnClass, validIds }"]
+        EG4["Agent calls add_exploit()<br/>with vulnerability_id"]
+        EG5{"Zod refine check:<br/>ID in validIds<br/>set?"}
+        EG6["REJECTED: return list of<br/>valid IDs (preview 8,<br/>show total count)"]
+        EG7["ACCEPTED: record as<br/>exploited / blocked / OOS"]
+    end
+
+    subgraph SpendingCap["SPENDING CAP DETECTION (defense-in-depth)"]
+        C1["Layer 1: SDK Structured Errors<br/>SDKAssistantMessageError<br/>type=billing_error"]
+        C2["Layer 2: Text Sniffing<br/>detectApiError()<br/>matchesBillingTextPattern()"]
+        C3["Layer 3: Behavioral Heuristic<br/>isSpendingCapBehavior()<br/>turns <= 2 && cost === 0<br/>&& billing text match"]
+        C4["On detection:<br/>PentestError(billing, retryable=true)<br/>Temporal retries with 5m-30m backoff"]
+    end
+
+    subgraph MCPValidation["MCP SCHEMA VALIDATION"]
+        M1["All MCP tools use Zod schemas<br/>converted to JSON Schema draft-07"]
+        M2["One-shot tools: reject duplicate calls<br/>with DuplicateError"]
+        M3["add_exploit tool: strict ID validation<br/>via Zod .refine() against validIds"]
+        M4["Structured output for vuln agents:<br/>Zod → JSON Schema → SDK validation<br/>LLM must conform or retry"]
+    end
+
+    S1 --> S2 --> S3
+    G1 --> G2
+    G2 --> G3
+    G2 --> G4
+    G5 --> G1
+
+    R1 --> R2
+    R2 -->|"Yes"| R3 --> R4
+    R2 -->|"No"| R7
+    R4 -->|"Yes"| R5
+    R4 -->|"No"| R6 --> R7
+
+    Q1 --> Q2 --> Q3 --> Q4
+    Q4 --> Q5 --> Q9 --> Q10
+    Q4 --> Q6 --> Q1
+    Q4 --> Q7 --> Q1
+    Q4 --> Q8 --> Q1
+    Q10 -->|">0"| Q11
+    Q10 -->|"==0"| Q12
+
+    EG1 --> EG2 --> EG3 --> EG4 --> EG5
+    EG5 -->|"Invalid"| EG6 --> EG4
+    EG5 -->|"Valid"| EG7
+
+    C1 --> C4
+    C2 --> C4
+    C3 --> C4
+
+    classDef state fill:#aed6f1,stroke:#2980b9,color:#111
+    classDef checkpoint fill:#f9e79f,stroke:#f1c40f,color:#111
+    classDef guard fill:#ff6b6b,stroke:#c0392b,color:#fff
+    classDef exploit fill:#d9b3ff,stroke:#8b5cf6,color:#111
+    classDef cap fill:#f5b7b1,stroke:#e74c3c,color:#111
+    classDef schema fill:#d5f4e6,stroke:#2ecc71,color:#111
+
+    class S1,S2,S3 state
+    class G1,G2,G3,G4,G5 checkpoint
+    class Q1,Q2,Q3,Q4,Q5,Q6,Q7,Q8,Q9,Q10,Q11,Q12 guard
+    class EG1,EG2,EG3,EG4,EG5,EG6,EG7 exploit
+    class C1,C2,C3,C4 cap
+    class M1,M2,M3,M4 schema

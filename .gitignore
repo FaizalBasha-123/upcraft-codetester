@@ -1,0 +1,81 @@
+# Dependencies
+node_modules
+bower_components
+
+# Build output
+dist
+ts-dist
+build
+*.tsbuildinfo
+
+# Environment / secrets
+.env
+.env.*
+*.pem
+*.key
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea
+.vscode
+*.swp
+*~
+
+# Logs
+*.log
+logs/
+
+# Temporary
+tmp/
+temp/
+.cache
+
+# Turbo
+.turbo
+
+# SST
+.sst
+sst-env.d.ts
+
+# Bun
+*.bun-build
+
+# Nested git repos (tracked independently)
+deepagents/.git
+grok-build/.git
+horsy/.git
+oh-my-openagent/.git
+opencode-repo/.git
+shannon/.git
+strix/.git
+
+# Aider
+.aider*
+
+# Large binary files
+*.zip
+*.tar.gz
+*.dmg
+*.exe
+*.deb
+*.rpm
+
+# Python
+__pycache__
+*.pyc
+.venv
+venv
+
+# Rust
+target/
+
+# Playwright
+test-results/
+playwright-report/
+
+# Coverage
+coverage/
+.nyc_output/
