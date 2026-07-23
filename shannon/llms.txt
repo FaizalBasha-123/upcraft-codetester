@@ -1,0 +1,7 @@
+# Shannon
+
+Code analysis and testing framework.
+
+## Start Here
+
+- [README](README.md): Project overview and quick start.

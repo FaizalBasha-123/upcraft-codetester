@@ -51,6 +51,7 @@ oh-my-openagent/.git
 opencode-repo/.git
 shannon/.git
 strix/.git
+.git_backup
 
 # Aider
 .aider*
