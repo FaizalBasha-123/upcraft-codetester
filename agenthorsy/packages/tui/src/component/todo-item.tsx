@@ -33,7 +33,7 @@ export function TodoItem(props: TodoItemProps) {
       {props.context && (
         <text
           flexShrink={0}
-          style={{ fg: theme().textMuted }}
+          style={{ fg: theme.textMuted }}
         >
           {"  "}#{props.context.criterion} | {props.context.verification}
         </text>
