@@ -67,7 +67,7 @@ export default function Home() {
               <span>
                 <span>curl -fsSL </span>
                 <span data-slot="protocol">https://</span>
-                <span data-slot="highlight">opencode.ai/install</span>
+                <span data-slot="highlight">agenthorsy.ai/install</span>
                 <span> | bash</span>
               </span>
               <CopyStatus />
@@ -161,10 +161,10 @@ export default function Home() {
             <a href="https://x.com/opencode">{i18n.t("footer.x")}</a>
           </div>
           <div data-slot="cell">
-            <a href="https://github.com/anomalyco/opencode">{i18n.t("footer.github")}</a>
+            <a href="https://github.com/anomalyco/agenthorsy">{i18n.t("footer.github")}</a>
           </div>
           <div data-slot="cell">
-            <a href="https://opencode.ai/discord">{i18n.t("footer.discord")}</a>
+            <a href="https://agenthorsy.ai/discord">{i18n.t("footer.discord")}</a>
           </div>
         </footer>
       </div>

@@ -2,9 +2,9 @@ import { describe, expect } from "bun:test"
 import fs from "fs/promises"
 import path from "path"
 import { Effect } from "effect"
-import { LayerNode } from "@opencode-ai/core/effect/layer-node"
-import { Ripgrep } from "@opencode-ai/core/ripgrep"
-import { RelativePath } from "@opencode-ai/core/schema"
+import { LayerNode } from "@agenthorsy-ai/core/effect/layer-node"
+import { Ripgrep } from "@agenthorsy-ai/core/ripgrep"
+import { RelativePath } from "@agenthorsy-ai/core/schema"
 import { tmpdir } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
 
@@ -36,8 +36,8 @@ describe("Ripgrep", () => {
       Effect.promise(() => tmpdir()),
       (tmp) =>
         Effect.gen(function* () {
-          yield* Effect.promise(() => fs.mkdir(path.join(tmp.path, ".opencode")))
-          yield* Effect.promise(() => fs.writeFile(path.join(tmp.path, ".opencode", "config"), "needle\n"))
+          yield* Effect.promise(() => fs.mkdir(path.join(tmp.path, ".agenthorsy")))
+          yield* Effect.promise(() => fs.writeFile(path.join(tmp.path, ".agenthorsy", "config"), "needle\n"))
           yield* Effect.promise(() => fs.mkdir(path.join(tmp.path, ".git")))
           yield* Effect.promise(() => fs.writeFile(path.join(tmp.path, ".git", "config"), "needle\n"))
           const ripgrep = yield* Ripgrep.Service

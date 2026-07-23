@@ -1,19 +1,19 @@
 import type { APIEvent } from "@solidjs/start/server"
-import { and, Database, eq, isNull, lt, or, sql } from "@opencode-ai/console-core/drizzle/index.js"
-import { KeyTable } from "@opencode-ai/console-core/schema/key.sql.js"
-import { BillingTable, LiteTable, SubscriptionTable, UsageTable } from "@opencode-ai/console-core/schema/billing.sql.js"
-import { centsToMicroCents } from "@opencode-ai/console-core/util/price.js"
-import { getMonthlyBounds, getWeekBounds } from "@opencode-ai/console-core/util/date.js"
-import { Identifier } from "@opencode-ai/console-core/identifier.js"
-import { Billing } from "@opencode-ai/console-core/billing.js"
-import { Actor } from "@opencode-ai/console-core/actor.js"
-import { WorkspaceTable } from "@opencode-ai/console-core/schema/workspace.sql.js"
-import { ZenData } from "@opencode-ai/console-core/model.js"
-import { Subscription } from "@opencode-ai/console-core/subscription.js"
-import { BlackData } from "@opencode-ai/console-core/black.js"
-import { UserTable } from "@opencode-ai/console-core/schema/user.sql.js"
-import { ModelTable } from "@opencode-ai/console-core/schema/model.sql.js"
-import { ProviderTable } from "@opencode-ai/console-core/schema/provider.sql.js"
+import { and, Database, eq, isNull, lt, or, sql } from "@agenthorsy-ai/console-core/drizzle/index.js"
+import { KeyTable } from "@agenthorsy-ai/console-core/schema/key.sql.js"
+import { BillingTable, LiteTable, SubscriptionTable, UsageTable } from "@agenthorsy-ai/console-core/schema/billing.sql.js"
+import { centsToMicroCents } from "@agenthorsy-ai/console-core/util/price.js"
+import { getMonthlyBounds, getWeekBounds } from "@agenthorsy-ai/console-core/util/date.js"
+import { Identifier } from "@agenthorsy-ai/console-core/identifier.js"
+import { Billing } from "@agenthorsy-ai/console-core/billing.js"
+import { Actor } from "@agenthorsy-ai/console-core/actor.js"
+import { WorkspaceTable } from "@agenthorsy-ai/console-core/schema/workspace.sql.js"
+import { ZenData } from "@agenthorsy-ai/console-core/model.js"
+import { Subscription } from "@agenthorsy-ai/console-core/subscription.js"
+import { BlackData } from "@agenthorsy-ai/console-core/black.js"
+import { UserTable } from "@agenthorsy-ai/console-core/schema/user.sql.js"
+import { ModelTable } from "@agenthorsy-ai/console-core/schema/model.sql.js"
+import { ProviderTable } from "@agenthorsy-ai/console-core/schema/provider.sql.js"
 import { logger } from "./logger"
 import {
   AuthError,
@@ -42,15 +42,15 @@ import { createRateLimiter as createIpRateLimiter } from "./ipRateLimiter"
 import { createRateLimiter as createKeyRateLimiter } from "./keyRateLimiter"
 import { createTrialLimiter } from "./trialLimiter"
 import { createStickyTracker } from "./stickyProviderTracker"
-import { LiteData } from "@opencode-ai/console-core/lite.js"
-import { Resource } from "@opencode-ai/console-resource"
+import { LiteData } from "@agenthorsy-ai/console-core/lite.js"
+import { Resource } from "@agenthorsy-ai/console-resource"
 import { i18n, type Key } from "~/i18n"
 import { localeFromRequest } from "~/lib/language"
 import { createModelTpmLimiter } from "./modelTpmLimiter"
 import { createModelTpsLimiter } from "./modelTpsLimiter"
 import { createProviderBudgetTracker } from "./providerBudgetTracker"
 import { accumulateUsage, HOT_WORKSPACES } from "./usageBatcher"
-import { Workspace } from "@opencode-ai/console-core/workspace.js"
+import { Workspace } from "@agenthorsy-ai/console-core/workspace.js"
 import { countryFromRequest } from "~/lib/request-country"
 
 type ZenData = Awaited<ReturnType<typeof ZenData.list>>
@@ -141,7 +141,7 @@ export async function handler(
       if (!allowedRegions?.includes("unavailable"))
         throw new RegionError(
           t("zen.api.error.regionNotAllowed", {
-            consoleGoUrl: `https://opencode.ai/workspace/${authInfo.workspaceID}/go`,
+            consoleGoUrl: `https://agenthorsy.ai/workspace/${authInfo.workspaceID}/go`,
           }),
         )
     }
@@ -552,7 +552,7 @@ export async function handler(
       throw new ModelError(
         `${t("zen.api.error.trialEnded", {
           model: modelData.name,
-          link: "https://opencode.ai/go",
+          link: "https://agenthorsy.ai/go",
         })}`,
       )
 
@@ -875,7 +875,7 @@ export async function handler(
     // Validate lite subscription billing
     if (opts.modelList === "lite" && authInfo.billing.lite && authInfo.lite) {
       try {
-        const consoleGoUrl = `https://opencode.ai/workspace/${authInfo.workspaceID}/go`
+        const consoleGoUrl = `https://agenthorsy.ai/workspace/${authInfo.workspaceID}/go`
         const sub = authInfo.lite
         const liteData = LiteData.getLimits()
 
@@ -946,8 +946,8 @@ export async function handler(
 
     // Validate pay as you go billing
     const billing = authInfo.billing
-    const billingUrl = `https://opencode.ai/workspace/${authInfo.workspaceID}/billing`
-    const membersUrl = `https://opencode.ai/workspace/${authInfo.workspaceID}/members`
+    const billingUrl = `https://agenthorsy.ai/workspace/${authInfo.workspaceID}/billing`
+    const membersUrl = `https://agenthorsy.ai/workspace/${authInfo.workspaceID}/members`
     if (!billing.paymentMethodID && billing.balance <= 0)
       throw new CreditsError(t("zen.api.error.noPaymentMethod", { billingUrl }))
     if (billing.balance <= 0) throw new CreditsError(t("zen.api.error.insufficientBalance", { billingUrl }))

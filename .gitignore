@@ -32,3 +32,12 @@ UPCOMING_CHANGELOG.md
 logs/
 *.bun-build
 tsconfig.tsbuildinfo
+
+# Auto-generated
+sst-env.d.ts
+
+# Temp error logs
+tsc-errors*.txt
+
+# Runtime
+app.log

@@ -1,12 +1,12 @@
 import { describe, expect } from "bun:test"
 import { Effect } from "effect"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { Integration } from "@opencode-ai/core/integration"
-import { PluginV2 } from "@opencode-ai/core/plugin"
-import { PluginHost } from "@opencode-ai/core/plugin/host"
-import { ProviderPlugins } from "@opencode-ai/core/plugin/provider"
-import { LLMGatewayPlugin } from "@opencode-ai/core/plugin/provider/llmgateway"
-import { ProviderV2 } from "@opencode-ai/core/provider"
+import { Catalog } from "@agenthorsy-ai/core/catalog"
+import { Integration } from "@agenthorsy-ai/core/integration"
+import { PluginV2 } from "@agenthorsy-ai/core/plugin"
+import { PluginHost } from "@agenthorsy-ai/core/plugin/host"
+import { ProviderPlugins } from "@agenthorsy-ai/core/plugin/provider"
+import { LLMGatewayPlugin } from "@agenthorsy-ai/core/plugin/provider/llmgateway"
+import { ProviderV2 } from "@agenthorsy-ai/core/provider"
 import { testEffect } from "../lib/effect"
 import { PluginTestLayer } from "./fixture"
 
@@ -46,7 +46,7 @@ describe("LLMGatewayPlugin", () => {
       yield* addPlugin()
       expect((yield* catalog.provider.get(ProviderV2.ID.make("llmgateway")))?.request.headers).toEqual({
         Existing: "value",
-        "HTTP-Referer": "https://opencode.ai/",
+        "HTTP-Referer": "https://agenthorsy.ai/",
         "X-Title": "opencode",
         "X-Source": "opencode",
       })

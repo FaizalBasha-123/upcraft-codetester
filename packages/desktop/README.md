@@ -1,6 +1,6 @@
-# OpenCode Desktop
+# AgentHorsy Desktop
 
-The OpenCode Desktop app, built with Electron.
+The AgentHorsy Desktop app, built with Electron.
 
 ## Development
 

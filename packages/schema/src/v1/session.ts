@@ -201,6 +201,13 @@ export const CompactionPart = Schema.Struct({
 }).annotate({ identifier: "CompactionPart" })
 export type CompactionPart = Types.DeepMutable<Schema.Schema.Type<typeof CompactionPart>>
 
+export const LatentCompactionPart = Schema.Struct({
+  ...partBase,
+  type: Schema.Literal("latent-compaction"),
+  blob: Schema.String,
+}).annotate({ identifier: "LatentCompactionPart" })
+export type LatentCompactionPart = Types.DeepMutable<Schema.Schema.Type<typeof LatentCompactionPart>>
+
 export const SubtaskPart = Schema.Struct({
   ...partBase,
   type: Schema.Literal("subtask"),
@@ -367,6 +374,7 @@ export const Part = Schema.Union([
   AgentPart,
   RetryPart,
   CompactionPart,
+  LatentCompactionPart,
 ]).annotate({ discriminator: "type", identifier: "Part" })
 export type Part =
   | TextPart
@@ -381,6 +389,7 @@ export type Part =
   | AgentPart
   | RetryPart
   | CompactionPart
+  | LatentCompactionPart
 
 const AssistantErrorSchema = Schema.Union([
   AuthError.EffectSchema,

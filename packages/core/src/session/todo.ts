@@ -2,7 +2,8 @@ export * as SessionTodo from "./todo"
 
 import { asc, eq } from "drizzle-orm"
 import { Context, Effect, Layer } from "effect"
-import { SessionTodo } from "@opencode-ai/schema/session-todo"
+import { SessionTodo } from "@agenthorsy-ai/schema/session-todo"
+import { Schema } from "effect"
 import { Database } from "../database/database"
 import { makeLocationNode } from "../effect/app-node"
 import { EventV2 } from "../event"
@@ -21,7 +22,7 @@ export interface Interface {
   readonly get: (sessionID: SessionSchema.ID) => Effect.Effect<ReadonlyArray<Info>>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/v2/SessionTodo") {}
+export class Service extends Context.Service<Service, Interface>()("@agenthorsy/v2/SessionTodo") {}
 
 const layer = Layer.effect(
   Service,
@@ -46,6 +47,7 @@ const layer = Layer.effect(
                   content: todo.content,
                   status: todo.status,
                   priority: todo.priority,
+                  context: todo.context !== undefined ? JSON.stringify(todo.context) : null,
                   position,
                 })),
               )
@@ -68,6 +70,11 @@ const layer = Layer.effect(
         content: row.content,
         status: row.status,
         priority: row.priority,
+        context: row.context
+          ? Schema.decodeUnknownOption(SessionTodo.TodoContext)(JSON.parse(row.context)).pipe(
+              (opt) => opt._tag === "Some" ? opt.value : undefined,
+            )
+          : undefined,
       }))
     })
 

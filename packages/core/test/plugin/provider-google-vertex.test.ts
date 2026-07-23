@@ -1,12 +1,12 @@
-import { AISDK } from "@opencode-ai/core/aisdk"
+import { AISDK } from "@agenthorsy-ai/core/aisdk"
 import { describe, expect, mock } from "bun:test"
 import { Effect } from "effect"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { ModelV2 } from "@opencode-ai/core/model"
-import { PluginV2 } from "@opencode-ai/core/plugin"
-import { PluginHost } from "@opencode-ai/core/plugin/host"
-import { GoogleVertexPlugin } from "@opencode-ai/core/plugin/provider/google-vertex"
-import { ProviderV2 } from "@opencode-ai/core/provider"
+import { Catalog } from "@agenthorsy-ai/core/catalog"
+import { ModelV2 } from "@agenthorsy-ai/core/model"
+import { PluginV2 } from "@agenthorsy-ai/core/plugin"
+import { PluginHost } from "@agenthorsy-ai/core/plugin/host"
+import { GoogleVertexPlugin } from "@agenthorsy-ai/core/plugin/provider/google-vertex"
+import { ProviderV2 } from "@agenthorsy-ai/core/provider"
 import type { LanguageModelV3 } from "@ai-sdk/provider"
 import { testEffect } from "../lib/effect"
 import { PluginTestLayer } from "./fixture"
@@ -95,7 +95,7 @@ describe("GoogleVertexPlugin", () => {
           provider.api = {
             type: "aisdk",
             package: "@ai-sdk/openai-compatible",
-            url: "https://opencode.ai/zen/v1",
+            url: "https://agenthorsy.ai/zen/v1",
           }
         }),
       )

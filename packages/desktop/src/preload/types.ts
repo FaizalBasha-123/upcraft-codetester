@@ -1,19 +1,19 @@
-import type { DesktopMenuAction } from "@opencode-ai/app/desktop-menu"
-import type { WslServersPlatform } from "@opencode-ai/app/wsl/types"
-import type { UpdaterState } from "@opencode-ai/app/updater"
+import type { DesktopMenuAction } from "@agenthorsy-ai/app/desktop-menu"
+import type { WslServersPlatform } from "@agenthorsy-ai/app/wsl/types"
+import type { UpdaterState } from "@agenthorsy-ai/app/updater"
 export type {
   WslDistroProbe,
   WslInstalledDistro,
   WslJob,
   WslOnlineDistro,
-  WslOpencodeCheck,
+  WslAgenthorsyCheck,
   WslRuntimeCheck,
   WslServerConfig,
   WslServerItem,
   WslServerRuntime,
   WslServersEvent,
   WslServersState,
-} from "@opencode-ai/app/wsl/types"
+} from "@agenthorsy-ai/app/wsl/types"
 
 export type ServerReadyData = {
   url: string

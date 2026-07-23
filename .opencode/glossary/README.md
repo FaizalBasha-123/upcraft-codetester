@@ -33,11 +33,11 @@ Prefer guidance that is:
 
 ## Sources
 
-- PR #12345: https://github.com/anomalyco/opencode/pull/12345
+- PR #12345: https://github.com/anomalyco/agenthorsy/pull/12345
 
 ## Do Not Translate (Locale Additions)
 
-- `OpenCode` (preserve casing)
+- `AgentHorsy` (preserve casing)
 
 ## Preferred Terms
 

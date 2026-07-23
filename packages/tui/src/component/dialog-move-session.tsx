@@ -16,7 +16,7 @@ import { useCommandShortcut } from "../keymap"
 import { useProject } from "../context/project"
 import { Spinner } from "./spinner"
 import { DialogWorkspaceFileChanges } from "./dialog-workspace-file-changes"
-import type { ProjectDirectories } from "@opencode-ai/sdk/v2"
+import type { ProjectDirectories } from "@agenthorsy-ai/sdk/v2"
 import { useRoute } from "../context/route"
 
 export type MoveSessionSelection = { type: "directory"; directory: string; subdirectory: boolean } | { type: "new" }
@@ -86,11 +86,11 @@ export function DialogMoveSession(props: DialogMoveSessionProps) {
         // An initial load with no data surfaces the inline error view below. A
         // failed refresh intentionally stays quiet and keeps the already-shown
         // list interactive; reopening the dialog retries the load.
-        return info.value
+        return (info.value as ProjectDirectory[] | undefined)
       }
     },
   )
-  const directoryData = createMemo(() => directories() ?? props.initialDirectories)
+  const directoryData = createMemo(() => (directories() as ProjectDirectory[] | undefined) ?? props.initialDirectories)
   // Show the locked error view only when we have nothing to display. A refresh
   // that fails after the list rendered keeps the list and its actions.
   const showError = createMemo(() => Boolean(loadError()) && !directoryData())
@@ -104,8 +104,8 @@ export function DialogMoveSession(props: DialogMoveSessionProps) {
     if (!directory) return
     return (
       directoryData()
-        ?.filter((root) => contains(root.directory, directory))
-        .toSorted((a, b) => b.directory.length - a.directory.length)[0] ?? { directory }
+        ?.filter((root: ProjectDirectory) => contains(root.directory, directory))
+        .toSorted((a: ProjectDirectory, b: ProjectDirectory) => b.directory.length - a.directory.length)[0] ?? { directory }
     )
   })
 
@@ -211,7 +211,7 @@ export function DialogMoveSession(props: DialogMoveSessionProps) {
     if (!option.value || option.value.type !== "directory" || option.value.subdirectory || removing()) return
     const data = directoryData()
     const selected = option.value
-    const root = data?.find((item) => item.directory === selected.directory)
+    const root = data?.find((item: ProjectDirectory) => item.directory === selected.directory)
     if (!root?.strategy) return
     const deletingCurrent = selected.directory === currentRoot()?.directory
     if (toDelete() !== selected.directory) {
@@ -330,7 +330,7 @@ export function DialogMoveSession(props: DialogMoveSessionProps) {
                   disabled: (option) => {
                     const value = option?.value
                     if (!value || value.type !== "directory" || value.subdirectory) return true
-                    return !directoryData()?.find((item) => item.directory === value.directory)?.strategy
+                    return !directoryData()?.find((item: ProjectDirectory) => item.directory === value.directory)?.strategy
                   },
                   onTrigger: remove,
                 },

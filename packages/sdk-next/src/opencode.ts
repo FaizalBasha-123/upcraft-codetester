@@ -1,13 +1,13 @@
-import { OpenCode } from "@opencode-ai/client/effect"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { LayerNode } from "@opencode-ai/core/effect/layer-node"
-import { PermissionSaved } from "@opencode-ai/core/permission/saved"
-import { ApplicationTools } from "@opencode-ai/core/tool/application-tools"
-import { createEmbeddedRoutes } from "@opencode-ai/server/routes"
+import { AgentHorsy } from "@agenthorsy-ai/client/effect"
+import { AppNodeBuilder } from "@agenthorsy-ai/core/effect/app-node-builder"
+import { LayerNode } from "@agenthorsy-ai/core/effect/layer-node"
+import { PermissionSaved } from "@agenthorsy-ai/core/permission/saved"
+import { ApplicationTools } from "@agenthorsy-ai/core/tool/application-tools"
+import { createEmbeddedRoutes } from "@agenthorsy-ai/server/routes"
 import { Context, Effect, Layer, Scope } from "effect"
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/unstable/http"
 
-export const create = Effect.fn("OpenCode.create")(function* () {
+export const create = Effect.fn("AgentHorsy.create")(function* () {
   const scope = yield* Scope.Scope
   const memoMap = yield* Layer.makeMemoMap
   const context = yield* Layer.buildWithMemoMap(
@@ -32,7 +32,7 @@ export const create = Effect.fn("OpenCode.create")(function* () {
   const fetch = Object.assign((input: RequestInfo | URL, init?: RequestInit) => web.handler(new Request(input, init)), {
     preconnect: () => undefined,
   }) satisfies typeof globalThis.fetch
-  const client = yield* OpenCode.make({ baseUrl: "http://opencode.local" }).pipe(
+  const client = yield* AgentHorsy.make({ baseUrl: "http://opencode.local" }).pipe(
     Effect.provide(FetchHttpClient.layer),
     Effect.provideService(FetchHttpClient.Fetch, fetch),
   )
@@ -44,6 +44,6 @@ export const create = Effect.fn("OpenCode.create")(function* () {
 
 export type Interface = Effect.Success<ReturnType<typeof create>>
 
-export class Service extends Context.Service<Service, Interface>()("@opencode-ai/sdk-next/OpenCode") {}
+export class Service extends Context.Service<Service, Interface>()("@agenthorsy-ai/sdk-next/AgentHorsy") {}
 
 export const layer = Layer.effect(Service, create())

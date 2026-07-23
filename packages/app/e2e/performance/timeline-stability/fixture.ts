@@ -1,7 +1,7 @@
-import { base64Encode } from "@opencode-ai/core/util/encode"
-import { Event } from "@opencode-ai/schema/event"
-import { SessionStatusEvent } from "@opencode-ai/schema/session-status-event"
-import { SessionV1 } from "@opencode-ai/schema/session-v1"
+import { base64Encode } from "@agenthorsy-ai/core/util/encode"
+import { Event } from "@agenthorsy-ai/schema/event"
+import { SessionStatusEvent } from "@agenthorsy-ai/schema/session-status-event"
+import { SessionV1 } from "@agenthorsy-ai/schema/session-v1"
 import type {
   AssistantMessage,
   GlobalEvent,
@@ -12,14 +12,14 @@ import type {
   ToolPart,
   ToolState,
   UserMessage,
-} from "@opencode-ai/sdk/v2/client"
+} from "@agenthorsy-ai/sdk/v2/client"
 import { expect, type Page } from "@playwright/test"
 import { Schema } from "effect"
-import { mockOpenCodeServer } from "../../utils/mock-server"
+import { mockAgentHorsyServer } from "../../utils/mock-server"
 import { installSseTransport } from "../../utils/sse-transport"
 import { expectSessionTitle } from "../../utils/waits"
 
-export const directory = "C:/OpenCode/TimelineStability"
+export const directory = "C:/AgentHorsy/TimelineStability"
 export const projectID = "proj_timeline_stability"
 export const sessionID = "ses_timeline_stability"
 export const userID = "msg_1000_timeline_user"
@@ -113,7 +113,7 @@ export async function setupTimeline(
     server: `http://${process.env.PLAYWRIGHT_SERVER_HOST ?? "127.0.0.1"}:${process.env.PLAYWRIGHT_SERVER_PORT ?? "4096"}`,
     retry: input.eventRetry ?? 20,
   })
-  await mockOpenCodeServer(page, {
+  await mockAgentHorsyServer(page, {
     directory,
     project: project(),
     provider: provider(),
@@ -142,7 +142,7 @@ export async function setupTimeline(
   }, input.settings ?? {})
   if (input.locale) {
     await page.addInitScript((locale) => {
-      localStorage.setItem("opencode.global.dat:language", JSON.stringify({ locale }))
+      localStorage.setItem("agenthorsy.global.dat:language", JSON.stringify({ locale }))
     }, input.locale)
   }
   if (input.reducedMotion) await page.emulateMedia({ reducedMotion: "reduce" })
@@ -554,7 +554,7 @@ function provider() {
     all: [
       {
         id: "opencode",
-        name: "OpenCode",
+        name: "AgentHorsy",
         models: { "claude-opus-4-6": { id: "claude-opus-4-6", name: "Claude Opus 4.6", limit: { context: 200_000 } } },
       },
     ],

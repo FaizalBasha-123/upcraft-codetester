@@ -1,6 +1,6 @@
 # opencode GitHub Action
 
-A GitHub Action that integrates [opencode](https://opencode.ai) directly into your GitHub workflow.
+A GitHub Action that integrates [opencode](https://agenthorsy.ai) directly into your GitHub workflow.
 
 Mention `/opencode` in your comment, and opencode will execute tasks within your GitHub Actions runner.
 
@@ -60,7 +60,7 @@ This will walk you through installing the GitHub app, creating the workflow, and
 
 ### Manual Setup
 
-1. Install the GitHub app https://github.com/apps/opencode-agent. Make sure it is installed on the target repository.
+1. Install the GitHub app https://github.com/apps/agenthorsy-agent. Make sure it is installed on the target repository.
 2. Add the following workflow file to `.github/workflows/opencode.yml` in your repo. Set the appropriate `model` and required API keys in `env`.
 
    ```yml
@@ -88,7 +88,7 @@ This will walk you through installing the GitHub app, creating the workflow, and
               persist-credentials: false
 
           - name: Run opencode
-           uses: anomalyco/opencode/github@latest
+           uses: anomalyco/agenthorsy/github@latest
            env:
              ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -101,7 +101,7 @@ This will walk you through installing the GitHub app, creating the workflow, and
 
 ## Support
 
-This is an early release. If you encounter issues or have feedback, please create an issue at https://github.com/anomalyco/opencode/issues.
+This is an early release. If you encounter issues or have feedback, please create an issue at https://github.com/anomalyco/agenthorsy/issues.
 
 ## Development
 

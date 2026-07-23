@@ -1,11 +1,11 @@
 import { describe, expect } from "bun:test"
 import { Effect } from "effect"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { PluginV2 } from "@opencode-ai/core/plugin"
-import { PluginHost } from "@opencode-ai/core/plugin/host"
-import { ProviderPlugins } from "@opencode-ai/core/plugin/provider"
-import { KiloPlugin } from "@opencode-ai/core/plugin/provider/kilo"
-import { ProviderV2 } from "@opencode-ai/core/provider"
+import { Catalog } from "@agenthorsy-ai/core/catalog"
+import { PluginV2 } from "@agenthorsy-ai/core/plugin"
+import { PluginHost } from "@agenthorsy-ai/core/plugin/host"
+import { ProviderPlugins } from "@agenthorsy-ai/core/plugin/provider"
+import { KiloPlugin } from "@agenthorsy-ai/core/plugin/provider/kilo"
+import { ProviderV2 } from "@agenthorsy-ai/core/provider"
 import { testEffect } from "../lib/effect"
 import { PluginTestLayer } from "./fixture"
 
@@ -39,7 +39,7 @@ describe("KiloPlugin", () => {
       yield* addPlugin()
       expect((yield* catalog.provider.get(ProviderV2.ID.make("kilo")))?.request.headers).toEqual({
         Existing: "value",
-        "HTTP-Referer": "https://opencode.ai/",
+        "HTTP-Referer": "https://agenthorsy.ai/",
         "X-Title": "opencode",
       })
       expect((yield* catalog.provider.get(ProviderV2.ID.openrouter))?.request.headers).toEqual({})
@@ -61,7 +61,7 @@ describe("KiloPlugin", () => {
       yield* addPlugin()
 
       expect((yield* catalog.provider.get(ProviderV2.ID.make("kilo")))?.request.headers).toEqual({
-        "HTTP-Referer": "https://opencode.ai/",
+        "HTTP-Referer": "https://agenthorsy.ai/",
         "X-Title": "opencode",
       })
       expect((yield* catalog.provider.get(ProviderV2.ID.make("kilo")))?.request.headers).not.toHaveProperty(
@@ -90,7 +90,7 @@ describe("KiloPlugin", () => {
       yield* addPlugin()
 
       expect((yield* catalog.provider.get(ProviderV2.ID.make("kilo")))?.request.headers).toEqual({
-        "HTTP-Referer": "https://opencode.ai/",
+        "HTTP-Referer": "https://agenthorsy.ai/",
         "X-Title": "opencode",
       })
       expect((yield* catalog.provider.get(ProviderV2.ID.make("custom-kilo")))?.request.headers).toEqual({})

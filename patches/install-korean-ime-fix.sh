@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # opencode Korean IME Fix Installer
-# https://github.com/anomalyco/opencode/issues/14371
+# https://github.com/anomalyco/agenthorsy/issues/14371
 #
 # Patches opencode to prevent Korean (and other CJK) IME last character
 # truncation when pressing Enter in Kitty and other terminals.
@@ -50,7 +50,7 @@ else
 fi
 
 # ── 2. Verify the IME fix is present in source ────────────────────────
-PROMPT_FILE="$OPENCODE_SRC/packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx"
+PROMPT_FILE="$OPENCODE_SRC/packages/agenthorsy/src/cli/cmd/tui/component/prompt/index.tsx"
 if [ ! -f "$PROMPT_FILE" ]; then
   err "Prompt file not found: $PROMPT_FILE"
   exit 1
@@ -77,7 +77,7 @@ bun install --frozen-lockfile 2>/dev/null || bun install
 
 # ── 4. Build (current platform only) ──────────────────────────────────
 info "Building opencode for current platform ..."
-cd "$OPENCODE_SRC/packages/opencode"
+cd "$OPENCODE_SRC/packages/agenthorsy"
 bun run build --single
 
 # ── 5. Install binary ──────────────────────────────────────────────────
@@ -90,10 +90,10 @@ ARCH=$(uname -m)
 [ "$PLATFORM" = "darwin" ] && true
 [ "$PLATFORM" = "linux" ] && true
 
-BUILT_BINARY="$OPENCODE_SRC/packages/opencode/dist/opencode-${PLATFORM}-${ARCH}/bin/opencode"
+BUILT_BINARY="$OPENCODE_SRC/packages/agenthorsy/dist/opencode-${PLATFORM}-${ARCH}/bin/opencode"
 
 if [ ! -f "$BUILT_BINARY" ]; then
-  BUILT_BINARY=$(find "$OPENCODE_SRC/packages/opencode/dist" -name "opencode" -type f -executable 2>/dev/null | head -1)
+  BUILT_BINARY=$(find "$OPENCODE_SRC/packages/agenthorsy/dist" -name "opencode" -type f -executable 2>/dev/null | head -1)
 fi
 
 if [ -f "$BUILT_BINARY" ]; then
@@ -106,7 +106,7 @@ if [ -f "$BUILT_BINARY" ]; then
 else
   err "Build failed - binary not found in dist/"
   info "Try running manually:"
-  echo "  cd $OPENCODE_SRC/packages/opencode && bun run build --single"
+  echo "  cd $OPENCODE_SRC/packages/agenthorsy && bun run build --single"
   exit 1
 fi
 
@@ -114,7 +114,7 @@ echo ""
 ok "Done! Korean IME fix is now active."
 echo ""
 info "To uninstall and revert to the official release:"
-echo "  curl -fsSL https://opencode.ai/install | bash"
+echo "  curl -fsSL https://agenthorsy.ai/install | bash"
 echo ""
 info "To update (re-pull and rebuild):"
 echo "  $0"

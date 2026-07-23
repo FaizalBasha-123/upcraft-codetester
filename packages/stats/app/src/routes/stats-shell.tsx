@@ -8,8 +8,8 @@ import { route, type Locale } from "../lib/language"
 export type HeaderLink = { href: string; label: string }
 
 export const githubLink = {
-  href: "https://github.com/anomalyco/opencode",
-  apiHref: "https://api.github.com/repos/anomalyco/opencode",
+  href: "https://github.com/anomalyco/agenthorsy",
+  apiHref: "https://api.github.com/repos/anomalyco/agenthorsy",
   fallbackStars: "150K",
 }
 export const themePreferences = ["dark", "light", "system"] as const
@@ -132,8 +132,8 @@ export function Header(props: { githubStars: string; links?: readonly HeaderLink
             <strong>{i18n.t("header.github")}</strong>
             <span>[{props.githubStars}]</span>
           </a>
-          <a data-slot="header-button" data-variant="contrast" href="https://opencode.ai/">
-            <strong>{i18n.t("header.tryOpenCode")}</strong>
+          <a data-slot="header-button" data-variant="contrast" href="https://agenthorsy.ai/">
+            <strong>{i18n.t("header.tryAgentHorsy")}</strong>
           </a>
           <button
             data-slot="menu-button"
@@ -202,7 +202,7 @@ function DataWordmark() {
   )
 }
 
-function OpenCodeMark() {
+function AgentHorsyMark() {
   return (
     <svg data-slot="opencode-mark" width="40" height="40" viewBox="0 0 40 40" fill="none" aria-hidden="true">
       <path d="M40 40H0V0H40V40Z" fill="var(--stats-logo-bg)" />
@@ -232,12 +232,12 @@ export function Footer(props: {
     { href: "#geo-breakdown", label: i18n.t("nav.geoBreakdown") },
   ]
   const legal = [
-    { href: "https://opencode.ai/legal/terms-of-service", label: i18n.t("footer.terms") },
-    { href: "https://opencode.ai/legal/privacy-policy", label: i18n.t("footer.privacy") },
+    { href: "https://agenthorsy.ai/legal/terms-of-service", label: i18n.t("footer.terms") },
+    { href: "https://agenthorsy.ai/legal/privacy-policy", label: i18n.t("footer.privacy") },
   ]
   const connect = [
-    { href: "mailto:hello@opencode.ai", label: i18n.t("footer.contact") },
-    { href: "https://opencode.ai/discord", label: i18n.t("footer.community") },
+    { href: "mailto:hello@agenthorsy.ai", label: i18n.t("footer.contact") },
+    { href: "https://agenthorsy.ai/discord", label: i18n.t("footer.community") },
     { href: "https://x.com/opencode", label: "X" },
     { href: githubLink.href, label: i18n.t("header.github") },
     { href: "https://www.youtube.com/@anomaly-co", label: i18n.t("footer.youtube") },
@@ -251,8 +251,8 @@ export function Footer(props: {
     <footer data-component="footer">
       <Show when={bridge()}>{(link) => <SectionBridge label={link().label} href={link().href} />}</Show>
       <div data-slot="footer-grid">
-        <a data-slot="footer-mark" href="https://opencode.ai" aria-label={i18n.t("footer.homeAria")}>
-          <OpenCodeMark />
+        <a data-slot="footer-mark" href="https://agenthorsy.ai" aria-label={i18n.t("footer.homeAria")}>
+          <AgentHorsyMark />
         </a>
         <FooterColumn title={i18n.t("footer.modelData")} links={modelStats} localHref={localHref} />
         <FooterColumn title={i18n.t("footer.legal")} links={legal} localHref={localHref} />
@@ -433,7 +433,7 @@ function SubscribeModal(props: { onClose: () => void }) {
       <div data-slot="modal-scrim" aria-hidden="true" onClick={props.onClose} />
       <div data-slot="modal-panel">
         <div data-slot="modal-brand">
-          <img data-slot="modal-logo" src={opencodeWordmarkDark} alt="OpenCode" />
+          <img data-slot="modal-logo" src={opencodeWordmarkDark} alt="AgentHorsy" />
           <button
             data-slot="modal-close"
             type="button"
