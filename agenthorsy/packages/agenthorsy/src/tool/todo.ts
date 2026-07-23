@@ -28,6 +28,14 @@ export const TodoWriteTool = Tool.define<typeof Parameters, Metadata, Todo.Servi
             metadata: {},
           })
 
+          const missing = params.todos.filter((t) => !t.context)
+          if (missing.length > 0) {
+            return yield* new Tool.InvalidArgumentsError({
+              tool: "todowrite",
+              detail: `${missing.length} todo(s) missing required context field (criterion, verification, files). Every todo must include context.`,
+            })
+          }
+
           yield* todo.update({
             sessionID: ctx.sessionID,
             todos: params.todos,

@@ -11,6 +11,8 @@ A structured plan exists on disk — the source of truth for "done".
 2. SEED your todos from the plan's acceptance criteria using the todowrite tool
    - Each todo maps to one acceptance criterion
    - Include the criterion number in the todo content: "Criterion #1: [description]"
+   - Each todo MUST include its context field (criterion, verification, files) from the plan
+   - When updating existing todos, PRESERVE the context field — do not drop it
 3. WORK the checklist in order — mark exactly ONE todo as `in_progress`
 4. After each todo, flip it to `completed` and update the plan's - [ ] to - [x]
 5. When you deviate from the plan, append a bullet to the plan's ## Deviations section

@@ -36,8 +36,16 @@ const layer = Layer.effectDiscard(
           input: Input,
           output: Output,
           toModelOutput: ({ output }) => [{ type: "text", text: toModelOutput(output) }],
-          execute: (input, context) =>
-            Effect.gen(function* () {
+          execute: (input, context) => {
+            const missing = input.todos.filter((t) => !t.context)
+            if (missing.length > 0) {
+              return Effect.fail(
+                new ToolFailure({
+                  message: `${missing.length} todo(s) missing required context field (criterion, verification, files). Every todo must include context.`,
+                }),
+              )
+            }
+            return Effect.gen(function* () {
               yield* permission.assert({
                 action: name,
                 resources: ["*"],
@@ -48,7 +56,8 @@ const layer = Layer.effectDiscard(
               })
               yield* todos.update({ sessionID: context.sessionID, todos: input.todos })
               return { todos: input.todos }
-            }).pipe(Effect.mapError(() => new ToolFailure({ message: "Unable to update todos" }))),
+            }).pipe(Effect.mapError(() => new ToolFailure({ message: "Unable to update todos" })))
+          },
         }),
       })
       .pipe(Effect.orDie)
