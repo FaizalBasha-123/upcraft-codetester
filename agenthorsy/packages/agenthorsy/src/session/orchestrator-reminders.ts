@@ -48,6 +48,7 @@ export const applyOrchestratorReminders = Effect.fn("OrchestratorReminders.apply
       if (taskContext.acceptanceCriteria?.length) {
         parts.push(`Acceptance criteria:\n${taskContext.acceptanceCriteria.map((c) => `- ${c}`).join("\n")}`)
       }
+      parts.push(`Before completing: update /architecture/ and /database_metadata/ if this task changed architecture or schemas.`)
       directive = parts.join("\n")
     } else {
       // Fallback: extract from parent orchestrator's user message

@@ -20,6 +20,7 @@ A structured plan exists on disk — the source of truth for "done".
    - All `gating` checks MUST pass
    - `evidence` checks are best-effort corroboration
 7. SAVE durable proof: commit real tests, write captured output to your scratch dir
+8. UPDATE context files: after all todos pass, update /architecture/ and /database_metadata/ if your changes affect architecture or schemas. Skip if the change is isolated.
 
 Never claim completion without running verification. A plan criterion proven only 
 by prose, or with no captured evidence, will be refuted.

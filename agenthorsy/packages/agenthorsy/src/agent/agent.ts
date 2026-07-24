@@ -264,6 +264,8 @@ const layer = Layer.effect(
                   "*": "deny",
                   [path.join(".agenthorsy", "plans", "*.md")]: "allow",
                   [path.relative(ctx.worktree, path.join(Global.Path.data, "plans", "*.md"))]: "allow",
+                  "architecture/**/*.md": "allow",
+                  "database_metadata/**/*.md": "allow",
                 },
               }),
               user,

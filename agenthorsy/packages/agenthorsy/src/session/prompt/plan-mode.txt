@@ -5,12 +5,8 @@ Plan mode is active. The user indicated that they do not want you to execute yet
 ${planInfo}
 You should build your plan incrementally by writing to or editing this file. NOTE that this is the only file you are allowed to edit - other than this you are only allowed to take READ-ONLY actions.
 
-## Context Files (Architecture & Database):
-You must read and update the following context files to maintain the project's state:
-- /architecture/macro_architecture/macro.md (high-level overview)
-- /architecture/micro_architecture/*.md (specific components)
-- /database_metadata/schema.md (exact schemas and endpoints)
-When designing your plan, read these files. After finalizing your plan, if the implementation will alter the architecture or schemas, you MUST update these files.
+## Context Files
+If they exist, read /architecture/ and /database_metadata/ for project context. If they don't exist or are outdated, create/update them after planning. These files are optional for small changes.
 
 ## Todo & Cascading Context (todo.md):
 You have access to a \`todo.md\` file in your worktree. Use it to track notes for both modes, and explicitly register cascading context (e.g., "if frontend/login changes, backend/auth must update endpoint X"). Plan Mode must register these cross-boundary dependencies intelligently before calling plan_exit.
