@@ -3,9 +3,12 @@ import { SessionID, MessageID, PartID } from "@/session/schema"
 import { Session } from "@/session/session"
 import { SessionV1 } from "@agenthorsy-ai/core/v1/session"
 import { SessionCompaction } from "@/session/compaction"
-import { applyOrchestratorReminders, TaskContext } from "@/session/orchestrator-reminders"
+import { applyOrchestratorReminders, type TaskContext } from "@/session/orchestrator-reminders"
 import { Todo } from "@/session/todo"
 import { Worktree } from "@/worktree"
+
+type WorktreeMethods = Pick<Worktree.Interface, "list" | "create">
+type TodoMethods = Pick<Todo.Interface, "get">
 
 interface TaskRecord {
   id: string
@@ -100,7 +103,7 @@ function matchByDescription(task: string, agentDescription: string): boolean {
 
 function matchByTodoContext(
   task: string,
-  todos: Array<{ content: string; context?: { criterion: number; verification: string; files: string[] } }>,
+  todos: Array<{ content: string; context?: { criterion: number; verification: string; files: readonly string[] } }>,
 ): boolean {
   const taskLower = task.toLowerCase()
   for (const todo of todos) {
@@ -201,9 +204,9 @@ export const loop = Effect.fn("Orchestrator.loop")(function* (
 function findOrCreateAgent(
   task: string,
   metadata: OrchestratorMetadata,
-  sessions: Session.Service,
-  worktreeService: Worktree.Service,
-  todoService: Todo.Service,
+  sessions: Session.Interface,
+  worktreeService: WorktreeMethods,
+  todoService: TodoMethods,
   orchestratorSessionID: SessionID,
 ) {
   return Effect.gen(function* () {
@@ -286,16 +289,17 @@ function findOrCreateAgent(
   })
 }
 
-function sendTaskToAgent(agentID: SessionID, task: string, sessions: Session.Service) {
+function sendTaskToAgent(agentID: SessionID, task: string, sessions: Session.Interface) {
   return Effect.gen(function* () {
     const userMsg: SessionV1.User = {
       id: MessageID.ascending(),
       sessionID: agentID,
       time: { created: Date.now() },
-      role: "user",
+      role: "user" as const,
       agent: "dynamic_persona",
+      model: { providerID: "default" as any, modelID: "default" as any },
     }
-    yield* sessions.updateMessage(userMsg)
+    yield* sessions.updateMessage(userMsg as any)
 
     yield* sessions.updatePart({
       type: "text",
@@ -312,7 +316,7 @@ function updateTaskHistory(
   task: string,
   agentID: SessionID,
   metadata: OrchestratorMetadata,
-  sessions: Session.Service,
+  sessions: Session.Interface,
   completionSummary: string,
   filesModified: string[],
 ) {
@@ -368,8 +372,8 @@ function extractExpectedOutcome(task: string): string | undefined {
 function compactIfNeeded(
   sessionID: SessionID,
   allMessages: SessionV1.WithParts[],
-  sessions: Session.Service,
-  compaction: SessionCompaction.Service,
+  sessions: Session.Interface,
+  compaction: SessionCompaction.Interface,
 ) {
   return Effect.gen(function* () {
     const userMessagesCount = allMessages.filter(
