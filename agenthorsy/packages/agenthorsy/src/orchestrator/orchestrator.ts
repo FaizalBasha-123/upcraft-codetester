@@ -3,9 +3,13 @@ import { SessionID, MessageID, PartID } from "@/session/schema"
 import { Session } from "@/session/session"
 import { SessionV1 } from "@agenthorsy-ai/core/v1/session"
 import { SessionCompaction } from "@/session/compaction"
-import { applyOrchestratorReminders, TaskContext } from "@/session/orchestrator-reminders"
+import { applyOrchestratorReminders, type TaskContext } from "@/session/orchestrator-reminders"
 import { Todo } from "@/session/todo"
 import { Worktree } from "@/worktree"
+
+type SessionMethods = Pick<Session.Interface, "get" | "create" | "setMetadata" | "messages" | "updateMessage" | "updatePart">
+type WorktreeMethods = Pick<Worktree.Interface, "list" | "create">
+type TodoMethods = Pick<Todo.Interface, "get">
 
 interface TaskRecord {
   id: string
@@ -92,7 +96,7 @@ function matchByDescription(task: string, agentDescription: string): boolean {
 // Check if a task matches an agent's todo context
 function matchByTodoContext(
   task: string,
-  todos: Array<{ content: string; context?: { criterion: number; verification: string; files: string[] } }>,
+  todos: Array<{ content: string; context?: { criterion: number; verification: string; files: readonly string[] } }>,
 ): boolean {
   const taskLower = task.toLowerCase()
   for (const todo of todos) {
@@ -138,7 +142,7 @@ export const loop = Effect.fn("Orchestrator.loop")(function* (
 
   for (const task of tasks) {
     // Find matching agent or spawn new one
-    const { activeChild, worktreeDir } = yield* findOrCreateAgent(task, metadata, sessions, worktreeService, todoService, sessionID)
+    const { activeChild, worktreeDir } = yield* findOrCreateAgent(task, metadata, sessions as unknown as SessionMethods, worktreeService as unknown as WorktreeMethods, todoService as unknown as TodoMethods, sessionID)
 
     // Build task-specific context
     const taskContext: TaskContext = {
@@ -155,11 +159,11 @@ export const loop = Effect.fn("Orchestrator.loop")(function* (
     results.push(result)
 
     // Update task history in metadata
-    yield* updateTaskHistory(sessionID, task, activeChild.id, metadata, sessions)
+    yield* updateTaskHistory(sessionID, task, activeChild.id, metadata, sessions as unknown as SessionMethods)
   }
 
   // 4. Orchestrator compaction
-  yield* compactIfNeeded(sessionID, allMsgs, sessions, compaction)
+  yield* compactIfNeeded(sessionID, allMsgs, sessions as unknown as SessionMethods, compaction as unknown as SessionCompaction.Interface)
 
   if (results.length === 0) throw new Error("Orchestrator loop exited without a result from any child agent.")
   return results[results.length - 1]
@@ -168,9 +172,9 @@ export const loop = Effect.fn("Orchestrator.loop")(function* (
 function findOrCreateAgent(
   task: string,
   metadata: OrchestratorMetadata,
-  sessions: Session.Service,
-  worktreeService: Worktree.Service,
-  todoService: Todo.Service,
+  sessions: SessionMethods,
+  worktreeService: WorktreeMethods,
+  todoService: TodoMethods,
   orchestratorSessionID: SessionID,
 ) {
   return Effect.gen(function* () {
@@ -256,17 +260,18 @@ function findOrCreateAgent(
   })
 }
 
-function sendTaskToAgent(agentID: SessionID, task: string, sessions: Session.Service) {
+function sendTaskToAgent(agentID: SessionID, task: string, sessions: SessionMethods) {
   return Effect.gen(function* () {
     // Create a user message for the task
-    const userMsg: SessionV1.User = {
+    const userMsg = {
       id: MessageID.ascending(),
       sessionID: agentID,
       time: { created: Date.now() },
-      role: "user",
+      role: "user" as const,
       agent: "dynamic_persona",
+      model: { providerID: "default" as any, modelID: "default" as any },
     }
-    yield* sessions.updateMessage(userMsg)
+    yield* sessions.updateMessage(userMsg as any)
 
     // Add the task text as a part
     yield* sessions.updatePart({
@@ -284,7 +289,7 @@ function updateTaskHistory(
   task: string,
   agentID: SessionID,
   metadata: OrchestratorMetadata,
-  sessions: Session.Service,
+  sessions: SessionMethods,
 ) {
   return Effect.gen(function* () {
     const tasks = metadata.tasks || []
@@ -333,8 +338,8 @@ function extractExpectedOutcome(task: string): string | undefined {
 function compactIfNeeded(
   sessionID: SessionID,
   allMessages: SessionV1.WithParts[],
-  sessions: Session.Service,
-  compaction: SessionCompaction.Service,
+  sessions: SessionMethods,
+  compaction: SessionCompaction.Interface,
 ) {
   return Effect.gen(function* () {
     const userMessagesCount = allMessages.filter(
