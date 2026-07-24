@@ -166,6 +166,26 @@ export const Info = Schema.Struct({
       }),
     }),
   ),
+  hooks: Schema.optional(
+    Schema.mutable(
+      Schema.Array(
+        Schema.Struct({
+          event: Schema.Literals(["PreToolUse", "PostToolUse", "PreStop"]).annotate({
+            description: "Hook event type",
+          }),
+          matcher: Schema.optional(Schema.String).annotate({
+            description: 'Tool pattern to match, e.g. "edit|write" or "shell". Omit to match all tools.',
+          }),
+          command: Schema.String.annotate({
+            description: "Shell command to run. Exit code 0=pass, 2=fail (stderr becomes feedback).",
+          }),
+        }),
+      ),
+    ),
+  ).annotate({
+    description:
+      "Hooks that run at specific points during tool execution. Configure lint/test hooks for automatic error checking.",
+  }),
   experimental: Schema.optional(
     Schema.Struct({
       disable_paste_summary: Schema.optional(Schema.Boolean),

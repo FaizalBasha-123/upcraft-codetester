@@ -23,6 +23,7 @@ import { ProviderV2 } from "@agenthorsy-ai/core/provider"
 import { ModelV2 } from "@agenthorsy-ai/core/model"
 import { isRecord } from "@/util/record"
 import { RuntimeFlags } from "@/effect/runtime-flags"
+import { runPostToolUseHooks } from "@/tool/hooks"
 
 const MCP_RESOURCE_TOOLS = {
   list: "list_mcp_resources",
@@ -123,6 +124,13 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
               { tool: item.id, sessionID: ctx.sessionID, callID: ctx.callID, args },
               output,
             )
+            // PostToolUse hook — run lint/typecheck after edit/write/shell
+            const hookResult = yield* runPostToolUseHooks(item.id).pipe(
+              Effect.catch(() => Effect.succeed({ blocked: false } satisfies import("@/tool/hooks").HookResult)),
+            )
+            if (hookResult.replacement) {
+              return { ...output, output: hookResult.replacement }
+            }
             if (options.abortSignal?.aborted) {
               yield* input.processor.completeToolCall(options.toolCallId, output)
             }
