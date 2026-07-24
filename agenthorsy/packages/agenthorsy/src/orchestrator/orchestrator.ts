@@ -7,7 +7,6 @@ import { applyOrchestratorReminders, type TaskContext } from "@/session/orchestr
 import { Todo } from "@/session/todo"
 import { Worktree } from "@/worktree"
 
-type SessionMethods = Pick<Session.Interface, "get" | "create" | "setMetadata" | "messages" | "updateMessage" | "updatePart">
 type WorktreeMethods = Pick<Worktree.Interface, "list" | "create">
 type TodoMethods = Pick<Todo.Interface, "get">
 
@@ -18,11 +17,14 @@ interface TaskRecord {
   status: "pending" | "active" | "completed" | "failed"
   retries: number
   timestamp: number
+  completionSummary?: string
+  filesModified?: string[]
 }
 
 interface OrchestratorMetadata {
   tasks: TaskRecord[]
   activeChildID?: string
+  lastAggregatedSummary?: string
 }
 
 // Simple task decomposition heuristic
@@ -34,7 +36,6 @@ function decomposeTasks(query: string): string[] {
 
   if (sentences.length <= 1) return [query]
 
-  // Check for distinct action verbs suggesting multiple tasks
   const actionVerbs = [
     "add",
     "create",
@@ -64,9 +65,17 @@ function decomposeTasks(query: string): string[] {
   return tasks.length > 0 ? tasks : [query]
 }
 
-// Calculate keyword overlap between two descriptions
 function keywordOverlap(a: string, b: string): number {
-  const stopWords = new Set(["the", "a", "an", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had", "do", "does", "did", "will", "would", "could", "should", "may", "might", "shall", "can", "need", "dare", "ought", "used", "to", "of", "in", "for", "on", "with", "at", "by", "from", "as", "into", "through", "during", "before", "after", "above", "below", "between", "out", "off", "over", "under", "again", "further", "then", "once", "and", "but", "or", "nor", "not", "so", "yet", "both", "either", "neither", "each", "every", "all", "any", "few", "more", "most", "other", "some", "such", "no", "only", "own", "same", "than", "too", "very", "just", "that", "this", "these", "those"])
+  const stopWords = new Set([
+    "the", "a", "an", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had",
+    "do", "does", "did", "will", "would", "could", "should", "may", "might", "shall", "can",
+    "need", "dare", "ought", "used", "to", "of", "in", "for", "on", "with", "at", "by", "from",
+    "as", "into", "through", "during", "before", "after", "above", "below", "between", "out",
+    "off", "over", "under", "again", "further", "then", "once", "and", "but", "or", "nor", "not",
+    "so", "yet", "both", "either", "neither", "each", "every", "all", "any", "few", "more", "most",
+    "other", "some", "such", "no", "only", "own", "same", "than", "too", "very", "just", "that",
+    "this", "these", "those",
+  ])
 
   const wordsA = new Set(
     a
@@ -88,12 +97,10 @@ function keywordOverlap(a: string, b: string): number {
   return overlap
 }
 
-// Check if a task matches an existing agent's description
 function matchByDescription(task: string, agentDescription: string): boolean {
   return keywordOverlap(task, agentDescription) >= 2
 }
 
-// Check if a task matches an agent's todo context
 function matchByTodoContext(
   task: string,
   todos: Array<{ content: string; context?: { criterion: number; verification: string; files: readonly string[] } }>,
@@ -101,17 +108,20 @@ function matchByTodoContext(
   const taskLower = task.toLowerCase()
   for (const todo of todos) {
     if (todo.context) {
-      // Check if any file in the todo context is mentioned in the task
       const fileMatch = todo.context.files.some((f) => taskLower.includes(f.toLowerCase()))
       if (fileMatch) return true
-
-      // Check if the verification text overlaps significantly
       if (keywordOverlap(task, todo.context.verification) >= 2) return true
     }
-    // Also check todo content
     if (keywordOverlap(task, todo.content) >= 2) return true
   }
   return false
+}
+
+function extractText(result: SessionV1.WithParts): string {
+  return result.parts
+    .filter((p): p is SessionV1.TextPart => p.type === "text")
+    .map((p) => p.text)
+    .join("\n")
 }
 
 export const loop = Effect.fn("Orchestrator.loop")(function* (
@@ -123,7 +133,6 @@ export const loop = Effect.fn("Orchestrator.loop")(function* (
   const worktreeService = yield* Worktree.Service
   const todoService = yield* Todo.Service
 
-  // 1. Get orchestrator session and extract task description
   const orchestratorSession = yield* sessions.get(sessionID).pipe(Effect.orDie)
   const allMsgs = yield* sessions.messages({ sessionID }).pipe(Effect.orDie)
   const lastUserMsg = allMsgs.findLast((m) => m.info.role === "user")
@@ -133,37 +142,60 @@ export const loop = Effect.fn("Orchestrator.loop")(function* (
       .map((p) => p.text)
       .join(" ") || ""
 
-  // 2. Decompose into individual tasks
   const tasks = decomposeTasks(taskDescription)
   const metadata = (orchestratorSession.metadata as OrchestratorMetadata) || { tasks: [] }
 
-  // 3. Process each task
   const results: SessionV1.WithParts[] = []
 
   for (const task of tasks) {
-    // Find matching agent or spawn new one
-    const { activeChild, worktreeDir } = yield* findOrCreateAgent(task, metadata, sessions as unknown as SessionMethods, worktreeService as unknown as WorktreeMethods, todoService as unknown as TodoMethods, sessionID)
+    const { activeChild, worktreeDir } = yield* findOrCreateAgent(task, metadata, sessions, worktreeService, todoService, sessionID)
 
-    // Build task-specific context
+    // Look up previous task completion for this agent
+    const prevTask = metadata.tasks.findLast(
+      (t) => t.agentID === activeChild.id && t.status === "completed" && t.completionSummary,
+    )
+
     const taskContext: TaskContext = {
       description: task,
       scope: extractScope(task),
       expectedOutcome: extractExpectedOutcome(task),
+      previousTaskCompletion: prevTask
+        ? {
+            description: prevTask.description,
+            summary: prevTask.completionSummary ?? "",
+            filesModified: prevTask.filesModified ?? [],
+          }
+        : undefined,
     }
 
-    // Inject orchestrator reminders with task context
     yield* applyOrchestratorReminders(sessionID, activeChild.id, taskContext)
 
-    // Delegate to agent loop
     const result = yield* runAgentLoop(activeChild.id, worktreeDir)
     results.push(result)
 
-    // Update task history in metadata
-    yield* updateTaskHistory(sessionID, task, activeChild.id, metadata, sessions as unknown as SessionMethods)
+    // Extract completion data from agent's final response
+    const completionSummary = extractText(result).slice(0, 2000)
+    const filesModified = extractScope(task)?.split(", ") ?? []
+
+    yield* updateTaskHistory(sessionID, task, activeChild.id, metadata, sessions, completionSummary, filesModified)
   }
 
-  // 4. Orchestrator compaction
-  yield* compactIfNeeded(sessionID, allMsgs, sessions as unknown as SessionMethods, compaction as unknown as SessionCompaction.Interface)
+  // Result aggregation — store all results in orchestrator metadata
+  const aggregatedSummary = results
+    .map((r, i) => {
+      const text = extractText(r).slice(0, 500)
+      return `Task ${i + 1} (${tasks[i]}): ${text}`
+    })
+    .join("\n\n")
+
+  yield* sessions
+    .setMetadata({
+      sessionID,
+      metadata: { ...metadata, lastAggregatedSummary: aggregatedSummary },
+    })
+    .pipe(Effect.orDie)
+
+  yield* compactIfNeeded(sessionID, allMsgs, sessions, compaction)
 
   if (results.length === 0) throw new Error("Orchestrator loop exited without a result from any child agent.")
   return results[results.length - 1]
@@ -172,7 +204,7 @@ export const loop = Effect.fn("Orchestrator.loop")(function* (
 function findOrCreateAgent(
   task: string,
   metadata: OrchestratorMetadata,
-  sessions: SessionMethods,
+  sessions: Session.Interface,
   worktreeService: WorktreeMethods,
   todoService: TodoMethods,
   orchestratorSessionID: SessionID,
@@ -190,7 +222,6 @@ function findOrCreateAgent(
           }),
         )
         if (child && t.status !== "failed") {
-          // Found matching agent - send task to existing agent
           yield* sendTaskToAgent(child.id, task, sessions)
           const wtList = yield* worktreeService.list()
           const wt = wtList.find((w) => w.name === `agent-${child.id}`)
@@ -245,7 +276,6 @@ function findOrCreateAgent(
       })
       .pipe(Effect.orDie)
 
-    // Store reference to child immediately to prevent TOCTOU duplicates
     yield* sessions
       .setMetadata({
         sessionID: orchestratorSessionID,
@@ -253,17 +283,15 @@ function findOrCreateAgent(
       })
       .pipe(Effect.orDie)
 
-    // On spawn: create worktree
     const wtInfo = yield* worktreeService.create({ name: `agent-${newChild.id}` })
 
     return { activeChild: newChild, worktreeDir: wtInfo.directory }
   })
 }
 
-function sendTaskToAgent(agentID: SessionID, task: string, sessions: SessionMethods) {
+function sendTaskToAgent(agentID: SessionID, task: string, sessions: Session.Interface) {
   return Effect.gen(function* () {
-    // Create a user message for the task
-    const userMsg = {
+    const userMsg: SessionV1.User = {
       id: MessageID.ascending(),
       sessionID: agentID,
       time: { created: Date.now() },
@@ -273,7 +301,6 @@ function sendTaskToAgent(agentID: SessionID, task: string, sessions: SessionMeth
     }
     yield* sessions.updateMessage(userMsg as any)
 
-    // Add the task text as a part
     yield* sessions.updatePart({
       type: "text",
       id: PartID.ascending(),
@@ -289,16 +316,23 @@ function updateTaskHistory(
   task: string,
   agentID: SessionID,
   metadata: OrchestratorMetadata,
-  sessions: SessionMethods,
+  sessions: Session.Interface,
+  completionSummary: string,
+  filesModified: string[],
 ) {
   return Effect.gen(function* () {
     const tasks = metadata.tasks || []
     const finalChildSession = yield* sessions.get(agentID).pipe(Effect.orDie)
     const childFailures = (finalChildSession.metadata?.failures as any[]) || []
-    const finalStatus = childFailures.length > 0 ? `completed after ${childFailures.length} retries` : "completed"
 
     // Prevent duplicating the exact same task if the orchestrator re-runs
-    if (!tasks.some((t) => t.description === task)) {
+    const existing = tasks.find((t) => t.description === task && t.agentID === agentID)
+    if (existing) {
+      existing.status = "completed"
+      existing.retries = childFailures.length
+      existing.completionSummary = completionSummary
+      existing.filesModified = filesModified
+    } else {
       tasks.push({
         id: `task-${Date.now()}`,
         description: task,
@@ -306,6 +340,8 @@ function updateTaskHistory(
         status: "completed",
         retries: childFailures.length,
         timestamp: Date.now(),
+        completionSummary,
+        filesModified,
       })
     }
 
@@ -319,14 +355,12 @@ function updateTaskHistory(
 }
 
 function extractScope(task: string): string | undefined {
-  // Simple heuristic: look for file paths or module names
   const filePattern = /(?:src|lib|packages|modules?)\/[\w/]+\.\w+/g
   const matches = task.match(filePattern)
   return matches?.join(", ")
 }
 
 function extractExpectedOutcome(task: string): string | undefined {
-  // Look for phrases like "so that", "in order to", "to enable"
   const patterns = [/(?:so that|in order to|to enable|to allow|to make sure that)\s+(.+?)(?:\.|$)/i]
   for (const pattern of patterns) {
     const match = task.match(pattern)
@@ -338,7 +372,7 @@ function extractExpectedOutcome(task: string): string | undefined {
 function compactIfNeeded(
   sessionID: SessionID,
   allMessages: SessionV1.WithParts[],
-  sessions: SessionMethods,
+  sessions: Session.Interface,
   compaction: SessionCompaction.Interface,
 ) {
   return Effect.gen(function* () {
@@ -346,7 +380,6 @@ function compactIfNeeded(
       (m) => m.info.role === "user" && !m.parts.some((p) => p.type === "compaction"),
     ).length
 
-    // Compact more aggressively (every 4 delegation cycles)
     if (userMessagesCount >= 4) {
       const parent = allMessages.findLast((m) => m.info.role === "user")
       if (parent) {

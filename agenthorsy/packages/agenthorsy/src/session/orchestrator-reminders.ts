@@ -8,6 +8,11 @@ export interface TaskContext {
   scope?: string
   expectedOutcome?: string
   acceptanceCriteria?: string[]
+  previousTaskCompletion?: {
+    description: string
+    summary: string
+    filesModified: string[]
+  }
 }
 
 export const applyOrchestratorReminders = Effect.fn("OrchestratorReminders.apply")(function* (
@@ -26,7 +31,18 @@ export const applyOrchestratorReminders = Effect.fn("OrchestratorReminders.apply
     let directive: string
 
     if (taskContext) {
-      const parts = [`Task: ${taskContext.description}`]
+      const parts: string[] = []
+
+      // Prepend previous task completion context if available
+      if (taskContext.previousTaskCompletion) {
+        const prev = taskContext.previousTaskCompletion
+        const prevParts = [`Completed: ${prev.description}`]
+        if (prev.filesModified.length > 0) prevParts.push(`Files modified: ${prev.filesModified.join(", ")}`)
+        if (prev.summary) prevParts.push(`Summary: ${prev.summary}`)
+        parts.push(`<previous-task-completion>\n${prevParts.join("\n")}\n</previous-task-completion>`)
+      }
+
+      parts.push(`Task: ${taskContext.description}`)
       if (taskContext.scope) parts.push(`Scope: ${taskContext.scope}`)
       if (taskContext.expectedOutcome) parts.push(`Expected outcome: ${taskContext.expectedOutcome}`)
       if (taskContext.acceptanceCriteria?.length) {
