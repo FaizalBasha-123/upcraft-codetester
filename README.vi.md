@@ -122,7 +122,7 @@ Nếu bạn muốn đóng góp cho Horsy, vui lòng đọc [tài liệu hướng
 
 ### Xây dựng trên nền tảng Horsy
 
-Nếu bạn đang làm việc trên một dự án liên quan đến Horsy và sử dụng "opencode" như một phần của tên dự án, ví dụ "opencode-dashboard" hoặc "opencode-mobile", vui lòng thêm một ghi chú vào README của bạn để làm rõ rằng dự án đó không được xây dựng bởi đội ngũ Horsy và không liên kết với chúng tôi dưới bất kỳ hình thức nào.
+Nếu bạn đang làm việc trên một dự án liên quan đến Horsy và sử dụng "opencode" như một phần của tên dự án, ví dụ "agenthorsy-dashboard" hoặc "agenthorsy-mobile", vui lòng thêm một ghi chú vào README của bạn để làm rõ rằng dự án đó không được xây dựng bởi đội ngũ Horsy và không liên kết với chúng tôi dưới bất kỳ hình thức nào.
 
 ---
 

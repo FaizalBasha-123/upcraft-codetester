@@ -48,8 +48,9 @@ When in doubt, use it.
 When executing a plan, todos MUST be derived from acceptance criteria.
 Each todo carries context about WHY it exists.
 
-The `context` field is enforced by the schema — not just guidance. It is stored in the database
-and survives session restarts. Populate it when creating plan-execution todos.
+The `context` field is REQUIRED — the tool rejects calls without it.
+Every todo must include criterion, verification, and files.
+It is stored in the database and survives session restarts.
 
 ### Todo Format
 {

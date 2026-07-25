@@ -2101,6 +2101,111 @@ ToolRegistry.register({
 })
 
 ToolRegistry.register({
+  name: "orchestrator_task",
+  render(props) {
+    const data = useData()
+    const location = useLocation()
+    const childSessionId = createMemo(() => {
+      const value = props.metadata.sessionId
+      if (typeof value === "string" && value) return value
+    })
+    const taskIndex = createMemo(() => {
+      const value = props.input.taskIndex
+      return typeof value === "number" ? value : 0
+    })
+    const totalTasks = createMemo(() => {
+      const value = props.input.totalTasks
+      return typeof value === "number" ? value : 0
+    })
+    const description = createMemo(() => {
+      const value = props.input.description
+      return typeof value === "string" ? value : ""
+    })
+    const running = createMemo(() => props.status === "pending" || props.status === "running")
+    const completed = createMemo(() => props.status === "completed")
+    const errored = createMemo(() => props.status === "error")
+
+    const href = createMemo(() => sessionLink(childSessionId(), location.pathname, data.sessionHref))
+    const clickable = createMemo(() => !!(childSessionId() && (data.navigateToSession || href())))
+
+    const navigate = (event: MouseEvent) => {
+      if (!data.navigateToSession) return
+      if (event.button !== 0 || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
+      event.preventDefault()
+      const id = childSessionId()
+      if (!id) return
+      data.navigateToSession(id)
+    }
+
+    const navigateKey = (event: KeyboardEvent) => {
+      if (!clickable() || href()) return
+      if (event.key !== "Enter" && event.key !== " ") return
+      event.preventDefault()
+      const id = childSessionId()
+      if (!id) return
+      if (data.navigateToSession) data.navigateToSession(id)
+      else {
+        const value = href()
+        if (value) window.location.assign(value)
+      }
+    }
+
+    const trigger = () => (
+      <div data-component="orchestrator-task-card">
+        <div data-component="orchestrator-task-surface">
+          <div data-slot="basic-tool-tool-info-structured">
+            <div data-slot="basic-tool-tool-info-main">
+              <Show
+                when={running()}
+                fallback={
+                  <span data-component="orchestrator-task-icon">
+                    {completed() ? "✅" : errored() ? "❌" : "⏸"}
+                  </span>
+                }
+              >
+                <span data-component="orchestrator-task-spinner">🔨</span>
+              </Show>
+              <span data-component="orchestrator-task-index">
+                [Task {taskIndex()}/{totalTasks()}]
+              </span>
+              <span data-component="orchestrator-task-title">{description()}</span>
+              <Show when={running()}>
+                <span data-slot="basic-tool-tool-subtitle">Running...</span>
+              </Show>
+              <Show when={completed()}>
+                <span data-slot="basic-tool-tool-subtitle">Done</span>
+              </Show>
+              <Show when={errored()}>
+                <span data-slot="basic-tool-tool-subtitle">Failed</span>
+              </Show>
+            </div>
+          </div>
+        </div>
+        <Show when={clickable()}>
+          <div data-component="orchestrator-task-action">
+            <Icon name="square-arrow-top-right" size="small" />
+          </div>
+        </Show>
+      </div>
+    )
+
+    return (
+      <BasicTool
+        icon="brain"
+        status={props.status}
+        trigger={trigger()}
+        hideDetails
+        triggerAsLink
+        triggerHref={href()}
+        clickable={clickable()}
+        onTriggerClick={navigate}
+        onTriggerKeyDown={navigateKey}
+      />
+    )
+  },
+})
+
+ToolRegistry.register({
   name: "bash",
   render(props) {
     const i18n = useI18n()

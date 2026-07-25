@@ -30,7 +30,7 @@ Aşağıda ACP'yi destekleyen popüler düzenleyicilere ilişkin örnekler veril
 ```json title="~/.config/zed/settings.json"
 {
   "agent_servers": {
-    "OpenCode": {
+    "AgentHorsy": {
       "command": "opencode",
       "args": ["acp"]
     }
@@ -51,7 +51,7 @@ Açmak için **Komut Paleti**'ndeki `agent: new thread` eylemini kullanın.
         {
           "agent": {
             "custom": {
-              "name": "OpenCode",
+              "name": "AgentHorsy",
               "command": {
                 "command": "opencode",
                 "args": ["acp"]
@@ -74,15 +74,15 @@ Açmak için **Komut Paleti**'ndeki `agent: new thread` eylemini kullanın.
 ```json title="acp.json"
 {
   "agent_servers": {
-    "OpenCode": {
-      "command": "/absolute/path/bin/opencode",
+    "AgentHorsy": {
+      "command": "/absolute/path/bin/agenthorsy",
       "args": ["acp"]
     }
   }
 }
 ```
 
-Açmak için AI Chat agent seçicisindeki yeni 'OpenCode' ajanını kullanın.
+Açmak için AI Chat agent seçicisindeki yeni 'AgentHorsy' ajanını kullanın.
 
 ---
 

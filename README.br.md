@@ -122,7 +122,7 @@ Se você tem interesse em contribuir com o Horsy, leia os [contributing docs](./
 
 ### Construindo com Horsy
 
-Se você estiver trabalhando em um projeto relacionado ao Horsy e estiver usando "opencode" como parte do nome (por exemplo, "opencode-dashboard" ou "opencode-mobile"), adicione uma nota no README para deixar claro que não foi construído pela equipe do Horsy e não é afiliado a nós de nenhuma forma.
+Se você estiver trabalhando em um projeto relacionado ao Horsy e estiver usando "opencode" como parte do nome (por exemplo, "agenthorsy-dashboard" ou "agenthorsy-mobile"), adicione uma nota no README para deixar claro que não foi construído pela equipe do Horsy e não é afiliado a nós de nenhuma forma.
 
 ---
 

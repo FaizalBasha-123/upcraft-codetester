@@ -148,6 +148,10 @@ export interface Interface {
     auto: boolean
     overflow?: boolean
   }) => Effect.Effect<MessageID>
+  readonly estimate: (input: {
+    messages: SessionV1.WithParts[]
+    model: Provider.Model
+  }) => Effect.Effect<number>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@agenthorsy/SessionCompaction") {}
@@ -543,6 +547,7 @@ const layer = Layer.effect(
       prune,
       process: processCompaction,
       create,
+      estimate,
     })
   }),
 )

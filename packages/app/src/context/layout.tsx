@@ -292,6 +292,10 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         session: {
           width: DEFAULT_SESSION_WIDTH,
         },
+        agentPanel: {
+          opened: false,
+          width: 360,
+        },
         mobileSidebar: {
           opened: false,
         },
@@ -737,6 +741,22 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
             return
           }
           setStore("session", "width", width)
+        },
+      },
+      agentPanel: {
+        opened: createMemo(() => store.agentPanel?.opened ?? false),
+        width: createMemo(() => store.agentPanel?.width ?? 360),
+        open() {
+          setStore("agentPanel", "opened", true)
+        },
+        close() {
+          setStore("agentPanel", "opened", false)
+        },
+        toggle() {
+          setStore("agentPanel", "opened", (x) => !x)
+        },
+        resize(width: number) {
+          setStore("agentPanel", "width", width)
         },
       },
       mobileSidebar: {

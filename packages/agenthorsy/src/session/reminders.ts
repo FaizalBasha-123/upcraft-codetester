@@ -45,10 +45,90 @@ export const apply = Effect.fn("SessionReminders.apply")(function* (input: {
         synthetic: true,
       })
     }
+    // dynamic_persona: start in plan mode
+    if (input.agent.name === "dynamic_persona") {
+      const wasPlanMode = input.messages.some(
+        (msg) => msg.info.role === "assistant" && msg.info.agent === "dynamic_persona",
+      )
+      if (!wasPlanMode) {
+        // First turn: inject plan mode prompt
+        userMessage.parts.push({
+          id: PartID.ascending(),
+          messageID: userMessage.info.id,
+          sessionID: userMessage.info.sessionID,
+          type: "text",
+          text: PROMPT_PLAN,
+          synthetic: true,
+        })
+      }
+    }
+    // dynamic_persona transitioning to build mode (via plan_exit or switch_mode)
+    if (input.agent.name === "build") {
+      const wasPlanMode = input.messages.some(
+        (msg) => msg.info.role === "assistant" && msg.info.agent === "dynamic_persona",
+      )
+      if (wasPlanMode) {
+        userMessage.parts.push({
+          id: PartID.ascending(),
+          messageID: userMessage.info.id,
+          sessionID: userMessage.info.sessionID,
+          type: "text",
+          text: BUILD_SWITCH,
+          synthetic: true,
+        })
+      }
+    }
     return input.messages
   }
 
   const assistantMessage = input.messages.findLast((msg) => msg.info.role === "assistant")
+
+  // dynamic_persona: first turn in plan mode
+  if (input.agent.name === "dynamic_persona") {
+    const wasPlanMode = input.messages.some(
+      (msg) => msg.info.role === "assistant" && msg.info.agent === "dynamic_persona",
+    )
+    if (!wasPlanMode) {
+      const ctx = yield* InstanceState.context
+      const plan = Session.plan(input.session, ctx)
+      const exists = yield* fsys.existsSafe(plan)
+      if (!exists) yield* fsys.ensureDir(path.dirname(plan)).pipe(Effect.catch(Effect.die))
+      const part = yield* sessions.updatePart({
+        id: PartID.ascending(),
+        messageID: userMessage.info.id,
+        sessionID: userMessage.info.sessionID,
+        type: "text",
+        text: PLAN_MODE.replace("${planInfo}", () =>
+          exists
+            ? `A plan file already exists at ${plan}. You can read it and make incremental edits using the edit tool.`
+            : `No plan file exists yet. You should create your plan at ${plan} using the write tool.`,
+        ),
+        synthetic: true,
+      })
+      userMessage.parts.push(part)
+      return input.messages
+    }
+  }
+
+  // dynamic_persona transitioning to build mode (plan_exit or switch_mode)
+  if (input.agent.name === "build" && assistantMessage?.info.agent === "dynamic_persona") {
+    const ctx = yield* InstanceState.context
+    const plan = Session.plan(input.session, ctx)
+    const exists = yield* fsys.existsSafe(plan)
+    const part = yield* sessions.updatePart({
+      id: PartID.ascending(),
+      messageID: userMessage.info.id,
+      sessionID: userMessage.info.sessionID,
+      type: "text",
+      text: exists
+        ? `${BUILD_SWITCH}\n\nA plan file exists at ${plan}. You should execute on the plan defined within it`
+        : BUILD_SWITCH,
+      synthetic: true,
+    })
+    userMessage.parts.push(part)
+    return input.messages
+  }
+
   if (input.agent.name !== "plan" && assistantMessage?.info.agent === "plan") {
     const ctx = yield* InstanceState.context
     const plan = Session.plan(input.session, ctx)

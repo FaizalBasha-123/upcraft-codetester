@@ -122,7 +122,7 @@ Jeśli chcesz współtworzyć Horsy, przeczytaj [contributing docs](./CONTRIBUTI
 
 ### Budowanie na Horsy
 
-Jeśli pracujesz nad projektem związanym z Horsy i używasz "opencode" jako części nazwy (na przykład "opencode-dashboard" lub "opencode-mobile"), dodaj proszę notatkę do swojego README, aby wyjaśnić, że projekt nie jest tworzony przez zespół Horsy i nie jest z nami w żaden sposób powiązany.
+Jeśli pracujesz nad projektem związanym z Horsy i używasz "opencode" jako części nazwy (na przykład "agenthorsy-dashboard" lub "agenthorsy-mobile"), dodaj proszę notatkę do swojego README, aby wyjaśnić, że projekt nie jest tworzony przez zespół Horsy i nie jest z nami w żaden sposób powiązany.
 
 ---
 

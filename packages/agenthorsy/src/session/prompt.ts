@@ -36,6 +36,7 @@ import { Permission } from "@/permission"
 import { SessionStatus } from "./status"
 import { LLM } from "./llm"
 import { Shell } from "@agenthorsy-ai/core/shell"
+import { AppProcess } from "@agenthorsy-ai/core/process"
 import { ShellID } from "@/tool/shell/id"
 import { FSUtil } from "@agenthorsy-ai/core/fs-util"
 import { Truncate } from "@/tool/truncate"
@@ -47,6 +48,7 @@ import { InstanceState } from "@/effect/instance-state"
 import { TaskTool, type TaskPromptOps } from "@/tool/task"
 import { SessionRunState } from "./run-state"
 import { RuntimeFlags } from "@/effect/runtime-flags"
+import { runPreStopHooks } from "@/tool/hooks"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { Database } from "@agenthorsy-ai/core/database/database"
 import { ModelV2 } from "@agenthorsy-ai/core/model"
@@ -1078,13 +1080,15 @@ const layer = Layer.effect(
       throw new Error("Impossible")
     })
 
-    const runLoop: (sessionID: SessionID, worktreeDir?: string) => Effect.Effect<SessionV1.WithParts> = Effect.fn("SessionPrompt.run")(
+    const runLoop: (sessionID: SessionID, worktreeDir?: string) => Effect.Effect<SessionV1.WithParts, never, AppProcess.Service | Config.Service> = Effect.fn("SessionPrompt.run")(
       function* (sessionID: SessionID, worktreeDir?: string) {
         const defaultCtx = yield* InstanceState.context
         const ctx = worktreeDir ? { ...defaultCtx, worktree: worktreeDir, directory: worktreeDir } : defaultCtx
         let structured: unknown
         let step = 0
         const session = yield* sessions.get(sessionID).pipe(Effect.orDie)
+        let preStopRetryCount = 0
+        const MAX_PRESTOP_RETRIES = 3
 
         while (true) {
           yield* status.set(sessionID, { type: "busy" })
@@ -1125,6 +1129,37 @@ const layer = Layer.effect(
                 tool: orphan.tool,
                 callID: orphan.callID,
               })
+            }
+            // PreStop hook — run lint/test before allowing agent to stop
+            if (preStopRetryCount < MAX_PRESTOP_RETRIES) {
+              const hookResult = yield* runPreStopHooks().pipe(
+                Effect.catch(() => Effect.succeed({ blocked: false, replacement: undefined, feedback: undefined } satisfies import("@/tool/hooks").HookResult)),
+              )
+              if (hookResult.feedback) {
+                preStopRetryCount++
+                yield* Effect.logInfo("PreStop hook failed, injecting feedback", {
+                  "session.id": sessionID,
+                  retry: preStopRetryCount,
+                })
+                // Create synthetic user message with hook feedback
+                const feedbackMsg = yield* sessions.updateMessage({
+                  id: MessageID.ascending(),
+                  role: "user",
+                  sessionID,
+                  time: { created: Date.now() },
+                  agent: lastUser.agent,
+                  model: lastUser.model,
+                })
+                yield* sessions.updatePart({
+                  id: PartID.ascending(),
+                  messageID: feedbackMsg.id,
+                  sessionID,
+                  type: "text",
+                  text: `<system-reminder>\n${hookResult.feedback}\n</system-reminder>\n\nFix the above issues and try again. This is retry ${preStopRetryCount}/${MAX_PRESTOP_RETRIES}.`,
+                  synthetic: true,
+                })
+                continue // don't break — agent needs to fix issues
+              }
             }
             yield* Effect.logInfo("exiting loop", { "session.id": sessionID })
             break

@@ -37,15 +37,15 @@ A única ressalva aqui é o recurso opcional `/share`.
 
 #### Compartilhando conversas
 
-Se um usuário habilitar o recurso `/share`, a conversa e os dados associados a ela são enviados para o serviço que usamos para hospedar essas páginas de compartilhamento em opencode.ai.
+Se um usuário habilitar o recurso `/share`, a conversa e os dados associados a ela são enviados para o serviço que usamos para hospedar essas páginas de compartilhamento em agenthorsy.ai.
 
 Os dados são atualmente servidos através da rede de borda do nosso CDN e são armazenados em cache na borda perto de seus usuários.
 
 Recomendamos que você desative isso para seu teste.
 
-```json title="opencode.json"
+```json title="agenthorsy.json"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://agenthorsy.ai/config.json",
   "share": "disabled"
 }
 ```

@@ -2,6 +2,11 @@ Launch a new agent to handle complex, multistep tasks autonomously.
 
 When using the Task tool, you must specify a subagent_type parameter to select which agent type to use.
 
+Available agent types:
+- `general`: General-purpose agent for researching complex questions and executing multi-step tasks. Use this agent to execute multiple units of work in parallel.
+- `explore`: Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. "src/components/**/*.tsx"), search code for keywords (eg. "API endpoints"), or answer questions about the codebase (eg. "how do API endpoints work?"). When calling this agent, specify the desired thoroughness level: "quick" for basic searches, "medium" for moderate exploration, or "very thorough" for comprehensive analysis across multiple locations and naming conventions.
+- `dynamic_persona`: Autonomous agent that handles full lifecycle: plan → build → validate → merge. Starts in plan mode, explores codebase, designs approach, then switches to build mode to execute. Use this for complex tasks that require planning before implementation.
+
 When NOT to use the Task tool:
 - If you want to read a specific file path, use the Read or Glob tool instead of the Task tool, to find the match more quickly
 - If you are searching for a specific class definition like "class Foo", use the Grep tool instead, to find the match more quickly

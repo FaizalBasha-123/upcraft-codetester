@@ -88,7 +88,12 @@ describe("TodoWriteTool", () => {
       const registry = yield* ToolRegistry.Service
       const service = yield* SessionTodo.Service
       const todoList: ReadonlyArray<SessionTodo.Info> = [
-        { content: "Implement slice", status: "in_progress", priority: "high" },
+        {
+          content: "Implement slice",
+          status: "in_progress",
+          priority: "high",
+          context: { criterion: 1, verification: "gating: tests pass", files: ["src/slice.ts"] },
+        },
       ]
 
       expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual([TodoWriteTool.name])
@@ -104,21 +109,71 @@ describe("TodoWriteTool", () => {
     }),
   )
 
+  it.effect("rejects todos without context", () =>
+    Effect.gen(function* () {
+      yield* setup
+      const registry = yield* ToolRegistry.Service
+      const service = yield* SessionTodo.Service
+      const todoList: ReadonlyArray<SessionTodo.Info> = [
+        { content: "Missing context", status: "in_progress", priority: "high" },
+      ]
+
+      expect(yield* executeTool(registry, call(todoList))).toEqual({
+        type: "error",
+        value: "1 todo(s) missing required context field (criterion, verification, files). Every todo must include context.",
+      })
+      expect(yield* service.get(sessionID)).toEqual([])
+    }),
+  )
+
+  it.effect("accepts todos with context", () =>
+    Effect.gen(function* () {
+      yield* setup
+      const registry = yield* ToolRegistry.Service
+      const service = yield* SessionTodo.Service
+      const todoList: ReadonlyArray<SessionTodo.Info> = [
+        {
+          content: "Has context",
+          status: "pending",
+          priority: "medium",
+          context: { criterion: 2, verification: "evidence: UI renders", files: ["src/ui.tsx"] },
+        },
+      ]
+
+      expect(yield* settleTool(registry, call(todoList))).toEqual({
+        result: { type: "text", value: JSON.stringify(todoList, null, 2) },
+        output: {
+          structured: { todos: todoList },
+          content: [{ type: "text", text: JSON.stringify(todoList, null, 2) }],
+        },
+      })
+      expect(yield* service.get(sessionID)).toEqual(todoList)
+    }),
+  )
+
   it.effect("does not update persisted todos when permission is denied", () =>
     Effect.gen(function* () {
       yield* setup
       const registry = yield* ToolRegistry.Service
       const service = yield* SessionTodo.Service
-      yield* service.update({ sessionID, todos: [{ content: "keep", status: "pending", priority: "low" }] })
+      yield* service.update({
+        sessionID,
+        todos: [{ content: "keep", status: "pending", priority: "low", context: { criterion: 1, verification: "ok", files: [] } }],
+      })
       deny = true
 
       expect(
-        yield* executeTool(registry, call([{ content: "blocked", status: "completed", priority: "high" }])),
+        yield* executeTool(
+          registry,
+          call([{ content: "blocked", status: "completed", priority: "high", context: { criterion: 1, verification: "ok", files: [] } }]),
+        ),
       ).toEqual({
         type: "error",
         value: "Unable to update todos",
       })
-      expect(yield* service.get(sessionID)).toEqual([{ content: "keep", status: "pending", priority: "low" }])
+      expect(yield* service.get(sessionID)).toEqual([
+        { content: "keep", status: "pending", priority: "low", context: { criterion: 1, verification: "ok", files: [] } },
+      ])
       expect(assertions).toMatchObject([{ sessionID, action: "todowrite", resources: ["*"], save: ["*"] }])
     }),
   )
