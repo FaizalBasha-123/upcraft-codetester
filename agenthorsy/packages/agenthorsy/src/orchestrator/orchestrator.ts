@@ -7,6 +7,10 @@ import { applyOrchestratorReminders, type TaskContext } from "@/session/orchestr
 import { Todo } from "@/session/todo"
 import { Worktree } from "@/worktree"
 import { Glob } from "@agenthorsy-ai/core/util/glob"
+import { Provider } from "@/provider/provider"
+import { MessageV2 } from "@/session/message-v2"
+import { Token } from "@/util/token"
+import { Config } from "@/config/config"
 
 type WorktreeMethods = Pick<Worktree.Interface, "list" | "create">
 type TodoMethods = Pick<Todo.Interface, "get">
@@ -99,6 +103,79 @@ ${fileList}
 `
   await fs.mkdir(`${rootDir}/database_metadata`, { recursive: true })
   await fs.writeFile(target, scaffold, "utf-8")
+}
+
+const CONTEXT_USAGE_THRESHOLD = 0.75
+
+const ORCHESTRATOR_COMPACTION_PROMPT = `Summarize the orchestrator session. Follow this structure:
+
+## Objective
+- [what the user is trying to accomplish across all delegated tasks]
+
+## Delegation Summary
+- Task: [description] -> Agent: [agentID] -> Status: [completed/failed/retried]
+- Task: [description] -> Agent: [agentID] -> Status: [completed/failed/retried]
+
+## Work State
+### Completed
+- [tasks finished, key outcomes]
+### Active
+- [tasks in progress, current state]
+### Blocked
+- [failed tasks, blockers]
+
+## Next Move
+1. [next task to dispatch or action to take]
+2. [follow-up if known]
+
+## Relevant Files
+- [key files touched across all tasks]
+
+Preserve the most recent 2 delegation cycles with full detail.
+Do not include code, file contents, or validator output.
+Preserve task descriptions, agent IDs, and status exactly.`
+
+function estimateContextUsage(
+  sessionID: SessionID,
+  sessions: Session.Interface,
+  model: Provider.Model,
+) {
+  return Effect.gen(function* () {
+    const msgs = yield* sessions.messages({ sessionID }).pipe(Effect.orDie)
+    const modelMsgs = yield* MessageV2.toModelMessagesEffect(msgs, model)
+    return Token.estimate(JSON.stringify(modelMsgs))
+  })
+}
+
+function compactOrchestratorSession(
+  sessionID: SessionID,
+  sessions: Session.Interface,
+  compaction: SessionCompaction.Interface,
+  model: Provider.Model,
+) {
+  return Effect.gen(function* () {
+    const freshMsgs = yield* sessions.messages({ sessionID }).pipe(Effect.orDie)
+    const parent = freshMsgs.findLast((m) => m.info.role === "user")
+    if (!parent) return
+
+    const compactionMsgID = yield* compaction.create({
+      sessionID,
+      agent: "compaction",
+      model: { providerID: model.providerID, modelID: model.id },
+      auto: true,
+      overflow: false,
+    })
+
+    const updatedMsgs = yield* sessions.messages({ sessionID }).pipe(Effect.orDie)
+    yield* compaction.process({
+      parentID: compactionMsgID,
+      messages: updatedMsgs,
+      sessionID,
+      auto: true,
+      overflow: false,
+      prompt: ORCHESTRATOR_COMPACTION_PROMPT,
+    }).pipe(Effect.ignore)
+  })
 }
 
 const COMPLEX_KEYWORDS = [
@@ -315,6 +392,7 @@ export const loop = Effect.fn("Orchestrator.loop")(function* (
   const compaction = yield* SessionCompaction.Service
   const worktreeService = yield* Worktree.Service
   const todoService = yield* Todo.Service
+  const configService = yield* Config.Service
 
   const orchestratorSession = yield* sessions.get(sessionID).pipe(Effect.orDie)
   const allMsgs = yield* sessions.messages({ sessionID }).pipe(Effect.orDie)
@@ -386,6 +464,24 @@ export const loop = Effect.fn("Orchestrator.loop")(function* (
 
     // Inject completion marker
     yield* injectTaskMarker(sessionID, task, activeChild.id, i + 1, tasks.length, "completed", sessions, completionSummary.slice(0, 200))
+
+    // Check context usage — compact mid-loop if approaching limit
+    if (i < tasks.length - 1) {
+      const freshMsgs = yield* sessions.messages({ sessionID }).pipe(Effect.orDie)
+      const lastUser = freshMsgs.findLast((m) => m.info.role === "user")
+      const model = lastUser?.info.model as Provider.Model | undefined
+      if (model && model.limit.context > 0) {
+        const usage = yield* estimateContextUsage(sessionID, sessions, model).pipe(Effect.catchAll(() => Effect.succeed(0)))
+        const cfg = yield* configService.get()
+        const reserved = cfg.compaction?.reserved ?? 20_000
+        const usable = model.limit.input
+          ? Math.max(0, model.limit.input - reserved)
+          : Math.max(0, model.limit.context - (model.limit.output ?? 0))
+        if (usage >= usable * CONTEXT_USAGE_THRESHOLD) {
+          yield* compactOrchestratorSession(sessionID, sessions, compaction, model)
+        }
+      }
+    }
   }
 
   // Result aggregation — store all results in orchestrator metadata
@@ -405,7 +501,7 @@ export const loop = Effect.fn("Orchestrator.loop")(function* (
 
   yield* injectCompletionSummary(sessionID, metadata.tasks, tasks.length, sessions)
 
-  yield* compactIfNeeded(sessionID, allMsgs, sessions, compaction)
+  yield* compactIfNeeded(sessionID, sessions, compaction)
 
   if (results.length === 0) throw new Error("Orchestrator loop exited without a result from any child agent.")
   return results[results.length - 1]
@@ -671,36 +767,35 @@ function extractExpectedOutcome(task: string): string | undefined {
 
 function compactIfNeeded(
   sessionID: SessionID,
-  allMessages: SessionV1.WithParts[],
   sessions: Session.Interface,
   compaction: SessionCompaction.Interface,
 ) {
   return Effect.gen(function* () {
-    const userMessagesCount = allMessages.filter(
+    const freshMsgs = yield* sessions.messages({ sessionID }).pipe(Effect.orDie)
+    const nonCompactionUserMsgs = freshMsgs.filter(
       (m) => m.info.role === "user" && !m.parts.some((p) => p.type === "compaction"),
     ).length
 
-    if (userMessagesCount >= 4) {
-      const parent = allMessages.findLast((m) => m.info.role === "user")
+    if (nonCompactionUserMsgs >= 2) {
+      const parent = freshMsgs.findLast((m) => m.info.role === "user")
       if (parent) {
+        const model = parent.info.model as Provider.Model
         const compactionMsgID = yield* compaction.create({
           sessionID,
           agent: "compaction",
-          model: (parent.info as any).model,
+          model: { providerID: model.providerID, modelID: model.id },
           auto: true,
           overflow: false,
         })
-        const updatedMessages = yield* sessions.messages({ sessionID }).pipe(Effect.orDie)
-        yield* compaction
-          .process({
-            parentID: compactionMsgID,
-            messages: updatedMessages,
-            sessionID,
-            auto: true,
-            overflow: false,
-            prompt: `Summarize the completed delegation cycles in this format:\n- Task: [description] -> Agent: [agentID] -> Status: [completed/failed/retried]\nPreserve the most recent 2 delegation cycles intact.\nDo not include code, file contents, or validator output in the summary.`,
-          })
-          .pipe(Effect.ignore)
+        const updatedMsgs = yield* sessions.messages({ sessionID }).pipe(Effect.orDie)
+        yield* compaction.process({
+          parentID: compactionMsgID,
+          messages: updatedMsgs,
+          sessionID,
+          auto: true,
+          overflow: false,
+          prompt: ORCHESTRATOR_COMPACTION_PROMPT,
+        }).pipe(Effect.ignore)
       }
     }
   })
