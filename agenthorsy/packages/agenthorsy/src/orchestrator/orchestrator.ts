@@ -8,10 +8,11 @@ import { Todo } from "@/session/todo"
 import { Worktree } from "@/worktree"
 import { Glob } from "@agenthorsy-ai/core/util/glob"
 import { Provider } from "@/provider/provider"
-import { usable } from "@/session/overflow"
 import { MessageV2 } from "@/session/message-v2"
 import { Token } from "@/util/token"
 import { Config } from "@/config/config"
+import { usable } from "@/session/overflow"
+import { ConfigV1 } from "@agenthorsy-ai/core/v1/config/config"
 
 type WorktreeMethods = Pick<Worktree.Interface, "list" | "create">
 type TodoMethods = Pick<Todo.Interface, "get">
@@ -34,6 +35,26 @@ interface OrchestratorMetadata {
 }
 
 type TaskMarkerStatus = "running" | "completed" | "error"
+
+const ORCHESTRATOR_COMPACTION_PROMPT = `You are an orchestrator compaction assistant. Summarize the following delegation history into a concise anchor.
+
+## Objective
+State the high-level goal being worked on.
+
+## Delegation Summary
+List each completed delegation cycle concisely:
+- Task: [description] → Agent: [agentID] → Status: [completed/failed/retried]
+- Include only the most recent 3-4 cycles.
+
+## Work State
+Summarize what has been completed, what is currently in progress, and what remains.
+
+## Next Move
+State the immediate next step the orchestrator should take.
+
+## Relevant Files
+List key files and directories relevant to ongoing work.
+Do not include code, file contents, or full tool output. Keep the summary under 800 tokens.`
 
 const DB_STRONG_PATTERNS = ["**/*.sql.ts", "**/drizzle.config.*"]
 const DB_MEDIUM_PATTERNS = ["**/migrations/**/*.sql"]
@@ -104,77 +125,6 @@ ${fileList}
 `
   await fs.mkdir(`${rootDir}/database_metadata`, { recursive: true })
   await fs.writeFile(target, scaffold, "utf-8")
-}
-
-const ORCHESTRATOR_COMPACTION_PROMPT = `Summarize the orchestrator session. Follow this structure:
-
-## Objective
-- [what the user is trying to accomplish across all delegated tasks]
-
-## Delegation Summary
-- Task: [description] -> Agent: [agentID] -> Status: [completed/failed/retried]
-- Task: [description] -> Agent: [agentID] -> Status: [completed/failed/retried]
-
-## Work State
-### Completed
-- [tasks finished, key outcomes]
-### Active
-- [tasks in progress, current state]
-### Blocked
-- [failed tasks, blockers]
-
-## Next Move
-1. [next task to dispatch or action to take]
-2. [follow-up if known]
-
-## Relevant Files
-- [key files touched across all tasks]
-
-Preserve the most recent 2 delegation cycles with full detail.
-Do not include code, file contents, or validator output.
-Preserve task descriptions, agent IDs, and status exactly.`
-
-function estimateContextUsage(
-  sessionID: SessionID,
-  sessions: Session.Interface,
-  model: Provider.Model,
-) {
-  return Effect.gen(function* () {
-    const msgs = yield* sessions.messages({ sessionID }).pipe(Effect.orDie)
-    const modelMsgs = yield* MessageV2.toModelMessagesEffect(msgs, model)
-    return Token.estimate(JSON.stringify(modelMsgs))
-  })
-}
-
-function compactOrchestratorSession(
-  sessionID: SessionID,
-  sessions: Session.Interface,
-  compaction: SessionCompaction.Interface,
-  model: Provider.Model,
-) {
-  return Effect.gen(function* () {
-    const freshMsgs = yield* sessions.messages({ sessionID }).pipe(Effect.orDie)
-    const parent = freshMsgs.findLast((m) => m.info.role === "user")
-    if (!parent) return
-
-    const compactionMsgID = yield* compaction.create({
-      sessionID,
-      agent: "compaction",
-      model: { providerID: model.providerID, modelID: model.id },
-      auto: true,
-      overflow: false,
-    })
-
-    const updatedMsgs = yield* sessions.messages({ sessionID }).pipe(Effect.orDie)
-    yield* compaction.process({
-      parentID: compactionMsgID,
-      messages: updatedMsgs,
-      sessionID,
-      auto: true,
-      overflow: false,
-      prompt: ORCHESTRATOR_COMPACTION_PROMPT,
-    }).pipe(Effect.ignore)
-  })
 }
 
 const COMPLEX_KEYWORDS = [
@@ -252,7 +202,7 @@ function exploreAndBuildContext(
           }),
         ).then((results) => results.filter((r): r is { path: string; content: string } => r !== null)),
       ),
-    ).pipe(Effect.catchAll(() => Effect.succeed([] as Array<{ path: string; content: string }>)))
+    ).pipe(Effect.catch(() => Effect.succeed([] as Array<{ path: string; content: string }>)))
 
     for (const doc of readResults) {
       yield* sessions.updatePart({
@@ -299,7 +249,7 @@ function updateContextFiles(
         const entry = `\n## ${new Date().toISOString()}\n- Task: ${task}\n- Summary: ${resultText}\n`
         await fs.appendFile(summaryPath, entry, "utf-8")
       }),
-    ).pipe(Effect.catchAll(() => Effect.void))
+    ).pipe(Effect.catch(() => Effect.void))
   })
 }
 
@@ -385,13 +335,14 @@ function extractText(result: SessionV1.WithParts): string {
 
 export const loop = Effect.fn("Orchestrator.loop")(function* (
   sessionID: SessionID,
-  runAgentLoop: (id: SessionID, worktreeDir?: string) => Effect.Effect<SessionV1.WithParts>,
+  runAgentLoop: (id: SessionID, worktreeDir?: string) => Effect.Effect<SessionV1.WithParts, never, any>,
 ) {
   const sessions = yield* Session.Service
   const compaction = yield* SessionCompaction.Service
   const worktreeService = yield* Worktree.Service
   const todoService = yield* Todo.Service
-  const configService = yield* Config.Service
+  const config = yield* Config.Service
+  const provider = yield* Provider.Service
 
   const orchestratorSession = yield* sessions.get(sessionID).pipe(Effect.orDie)
   const allMsgs = yield* sessions.messages({ sessionID }).pipe(Effect.orDie)
@@ -405,9 +356,9 @@ export const loop = Effect.fn("Orchestrator.loop")(function* (
   // Detect database code in the codebase
   const wtList = yield* worktreeService.list()
   const rootDir = wtList[0]?.directory
-  const hasDB = rootDir ? yield* Effect.tryPromise(() => detectDatabaseCode(rootDir)).pipe(Effect.catchAll(() => Effect.succeed(false))) : false
+  const hasDB = rootDir ? yield* Effect.tryPromise(() => detectDatabaseCode(rootDir)).pipe(Effect.catch(() => Effect.succeed(false))) : false
   if (hasDB && rootDir) {
-    yield* Effect.tryPromise(() => scaffoldDatabaseMetadata(rootDir)).pipe(Effect.catchAll(() => Effect.void))
+    yield* Effect.tryPromise(() => scaffoldDatabaseMetadata(rootDir)).pipe(Effect.catch(() => Effect.void))
   }
 
   // Auto-explore for complex queries before decomposition
@@ -423,17 +374,16 @@ export const loop = Effect.fn("Orchestrator.loop")(function* (
   for (let i = 0; i < tasks.length; i++) {
     const task = tasks[i]
 
-    // Pre-task overflow check — compact preemptively before starting task
-    if (i > 0) {
+    // Pre-task overflow check — compact before starting task if orchestrator session is near overflow
+    {
       const freshMsgs = yield* sessions.messages({ sessionID }).pipe(Effect.orDie)
-      const lastUser = freshMsgs.findLast((m) => m.info.role === "user")
-      const model = lastUser?.info.model as Provider.Model | undefined
-      if (model && model.limit.context > 0) {
-        const usage = yield* estimateContextUsage(sessionID, sessions, model).pipe(Effect.catchAll(() => Effect.succeed(0)))
-        const cfg = yield* configService.get()
-        const budget = usable({ cfg, model })
-        if (budget > 0 && usage >= budget) {
-          yield* compactOrchestratorSession(sessionID, sessions, compaction, model)
+      const freshSession = yield* sessions.get(sessionID).pipe(Effect.orDie)
+      const cfg = yield* config.get()
+      const model = yield* resolveModelFromSession(freshSession.model, cfg.model, provider)
+      if (model) {
+        const tokens = yield* estimateContextUsage(freshMsgs, model, compaction)
+        if (isOrchestratorOverflow(tokens, cfg, model)) {
+          yield* compactOrchestratorSession(sessionID, sessions, compaction, config, provider, `pre-task overflow (${tokens} tokens)`)
         }
       }
     }
@@ -466,26 +416,15 @@ export const loop = Effect.fn("Orchestrator.loop")(function* (
     yield* applyOrchestratorReminders(sessionID, activeChild.id, taskContext, hasDB)
 
     const result = yield* runAgentLoop(activeChild.id, worktreeDir).pipe(
-      Effect.catch((error) => {
-        if (SessionV1.ContextOverflowError.isInstance(error)) {
-          return Effect.gen(function* () {
-            yield* Effect.logWarning("orchestrator", {
-              "session.id": sessionID,
-              message: "ContextOverflowError from child agent, compacting orchestrator and retrying",
-              agentID: activeChild.id,
-              task: task.slice(0, 100),
-            })
-            const freshMsgs = yield* sessions.messages({ sessionID }).pipe(Effect.orDie)
-            const lastUser = freshMsgs.findLast((m) => m.info.role === "user")
-            const model = lastUser?.info.model as Provider.Model | undefined
-            if (model) {
-              yield* compactOrchestratorSession(sessionID, sessions, compaction, model)
-            }
+      Effect.catch((error) =>
+        Effect.gen(function* () {
+          if (SessionV1.ContextOverflowError.isInstance(error)) {
+            yield* compactOrchestratorSession(sessionID, sessions, compaction, config, provider, "ContextOverflowError recovery")
             return yield* runAgentLoop(activeChild.id, worktreeDir)
-          })
-        }
-        return Effect.fail(error)
-      }),
+          }
+          return yield* Effect.fail(error)
+        }),
+      ),
     )
     results.push(result)
 
@@ -501,17 +440,16 @@ export const loop = Effect.fn("Orchestrator.loop")(function* (
     // Inject completion marker
     yield* injectTaskMarker(sessionID, task, activeChild.id, i + 1, tasks.length, "completed", sessions, completionSummary.slice(0, 200))
 
-    // Check context usage — compact mid-loop if approaching limit
+    // Mid-loop context check — compact if context overflow detected (skip last task, handled by end-of-loop)
     if (i < tasks.length - 1) {
-      const freshMsgs = yield* sessions.messages({ sessionID }).pipe(Effect.orDie)
-      const lastUser = freshMsgs.findLast((m) => m.info.role === "user")
-      const model = lastUser?.info.model as Provider.Model | undefined
-      if (model && model.limit.context > 0) {
-        const usage = yield* estimateContextUsage(sessionID, sessions, model).pipe(Effect.catchAll(() => Effect.succeed(0)))
-        const cfg = yield* configService.get()
-        const budget = usable({ cfg, model })
-        if (budget > 0 && usage >= budget) {
-          yield* compactOrchestratorSession(sessionID, sessions, compaction, model)
+      const orchestratorSession = yield* sessions.get(sessionID).pipe(Effect.orDie)
+      const cfg = yield* config.get()
+      const model = yield* resolveModelFromSession(orchestratorSession.model, cfg.model, provider)
+      if (model) {
+        const freshMsgs = yield* sessions.messages({ sessionID }).pipe(Effect.orDie)
+        const tokens = yield* estimateContextUsage(freshMsgs, model, compaction)
+        if (isOrchestratorOverflow(tokens, cfg, model)) {
+          yield* compactOrchestratorSession(sessionID, sessions, compaction, config, provider, `mid-loop overflow (${tokens} tokens)`)
         }
       }
     }
@@ -534,7 +472,7 @@ export const loop = Effect.fn("Orchestrator.loop")(function* (
 
   yield* injectCompletionSummary(sessionID, metadata.tasks, tasks.length, sessions)
 
-  yield* compactIfNeeded(sessionID, sessions, compaction)
+  yield* compactIfNeeded(sessionID, sessions, compaction, config, provider)
 
   if (results.length === 0) throw new Error("Orchestrator loop exited without a result from any child agent.")
   return results[results.length - 1]
@@ -699,7 +637,7 @@ function injectTaskMarker(
           : status === "error"
             ? { error: completionSummary ?? "failed", time: { start: Date.now(), end: Date.now() } }
             : { time: { start: Date.now() } }),
-      },
+      } as SessionV1.ToolPart["state"],
     } satisfies SessionV1.ToolPart as any)
   })
 }
@@ -798,38 +736,107 @@ function extractExpectedOutcome(task: string): string | undefined {
   return undefined
 }
 
+function estimateContextUsage(
+  messages: SessionV1.WithParts[],
+  model: Provider.Model,
+  compaction: SessionCompaction.Interface,
+) {
+  return Effect.gen(function* () {
+    return yield* compaction.estimate({ messages, model })
+  })
+}
+
+function isOrchestratorOverflow(
+  estimatedTokens: number,
+  cfg: ConfigV1.Info,
+  model: Provider.Model,
+) {
+  if (cfg.compaction?.auto === false) return false
+  if (model.limit.context === 0) return false
+  const budget = usable({ cfg, model })
+  return budget > 0 && estimatedTokens >= budget
+}
+
+function resolveModelFromSession(
+  sessionModel: { id: string; providerID: string } | undefined,
+  cfgModel: string | undefined,
+  provider: Provider.Interface,
+) {
+  return Effect.gen(function* () {
+    if (sessionModel) {
+      return yield* provider.getModel(sessionModel.providerID as any, sessionModel.id as any).pipe(Effect.match({ onSuccess: (m) => m as Provider.Model | undefined, onFailure: () => undefined }))
+    }
+    if (cfgModel) {
+      const parsed = Provider.parseModel(cfgModel)
+      return yield* provider.getModel(parsed.providerID, parsed.modelID).pipe(Effect.match({ onSuccess: (m) => m as Provider.Model | undefined, onFailure: () => undefined }))
+    }
+    const defaultModel = yield* provider.defaultModel().pipe(Effect.match({ onSuccess: (m) => m, onFailure: () => undefined }))
+    if (defaultModel) {
+      return yield* provider.getModel(defaultModel.providerID, defaultModel.modelID).pipe(Effect.match({ onSuccess: (m) => m as Provider.Model | undefined, onFailure: () => undefined }))
+    }
+    return undefined
+  })
+}
+
+function compactOrchestratorSession(
+  sessionID: SessionID,
+  sessions: Session.Interface,
+  compaction: SessionCompaction.Interface,
+  config: Config.Interface,
+  provider: Provider.Interface,
+  reason: string,
+) {
+  return Effect.gen(function* () {
+    const freshMsgs = yield* sessions.messages({ sessionID }).pipe(Effect.orDie)
+    const orchestratorSession = yield* sessions.get(sessionID).pipe(Effect.orDie)
+    const cfg = yield* config.get()
+    const model = yield* resolveModelFromSession(orchestratorSession.model, cfg.model, provider)
+    if (!model) return
+
+    const compactionMsgID = yield* compaction.create({
+      sessionID,
+      agent: "compaction",
+      model: { providerID: model.providerID as any, modelID: model.id as any },
+      auto: true,
+      overflow: false,
+    })
+
+    yield* compaction
+      .process({
+        parentID: compactionMsgID,
+        messages: freshMsgs,
+        sessionID,
+        auto: true,
+        overflow: false,
+        prompt: ORCHESTRATOR_COMPACTION_PROMPT,
+      })
+      .pipe(Effect.ignore)
+  })
+}
+
 function compactIfNeeded(
   sessionID: SessionID,
   sessions: Session.Interface,
   compaction: SessionCompaction.Interface,
+  config: Config.Interface,
+  provider: Provider.Interface,
 ) {
   return Effect.gen(function* () {
     const freshMsgs = yield* sessions.messages({ sessionID }).pipe(Effect.orDie)
-    const nonCompactionUserMsgs = freshMsgs.filter(
+    const userMessagesCount = freshMsgs.filter(
       (m) => m.info.role === "user" && !m.parts.some((p) => p.type === "compaction"),
     ).length
 
-    if (nonCompactionUserMsgs >= 2) {
-      const parent = freshMsgs.findLast((m) => m.info.role === "user")
-      if (parent) {
-        const model = parent.info.model as Provider.Model
-        const compactionMsgID = yield* compaction.create({
-          sessionID,
-          agent: "compaction",
-          model: { providerID: model.providerID, modelID: model.id },
-          auto: true,
-          overflow: false,
-        })
-        const updatedMsgs = yield* sessions.messages({ sessionID }).pipe(Effect.orDie)
-        yield* compaction.process({
-          parentID: compactionMsgID,
-          messages: updatedMsgs,
-          sessionID,
-          auto: true,
-          overflow: false,
-          prompt: ORCHESTRATOR_COMPACTION_PROMPT,
-        }).pipe(Effect.ignore)
-      }
-    }
+    if (userMessagesCount < 2) return
+
+    const orchestratorSession = yield* sessions.get(sessionID).pipe(Effect.orDie)
+    const cfg = yield* config.get()
+    const model = yield* resolveModelFromSession(orchestratorSession.model, cfg.model, provider)
+    if (!model) return
+
+    const usage = yield* estimateContextUsage(freshMsgs, model, compaction)
+    if (!isOrchestratorOverflow(usage, cfg, model)) return
+
+    yield* compactOrchestratorSession(sessionID, sessions, compaction, config, provider, `end-of-loop overflow (${usage} tokens)`)
   })
 }
