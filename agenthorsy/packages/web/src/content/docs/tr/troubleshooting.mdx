@@ -11,7 +11,7 @@ opencode ile ilgili bir sorunu ayiklamak icin once loglari ve diskte tuttugu yer
 
 Log dosyalari su konuma yazilir:
 
-- **macOS/Linux**: `~/.local/share/opencode/log/`
+- **macOS/Linux**: `~/.local/share/agenthorsy/log/`
 - **Windows**: `WIN+R` tuslayip `%USERPROFILE%\.local\share\opencode\log` yapistirin
 
 Log dosyalari zaman damgasiyla adlandirilir (ornegin `2025-01-09T123456.log`) ve en yeni 10 log dosyasi tutulur.
@@ -24,7 +24,7 @@ Daha ayrintili ayiklama bilgisi icin `--log-level` komut satiri secenegini kulla
 
 opencode, oturum verilerini ve diger uygulama verilerini diskte su konumda saklar:
 
-- **macOS/Linux**: `~/.local/share/opencode/`
+- **macOS/Linux**: `~/.local/share/agenthorsy/`
 - **Windows**: `WIN+R` tuslayip `%USERPROFILE%\.local\share\opencode` yapistirin
 
 Bu dizin sunlari icerir:
@@ -57,15 +57,15 @@ Desktop uygulamasi acilista cokuyorsa, takiliyorsa veya garip davranislar goster
 
 Global config dosyanizi acin ve `plugin` anahtarini arayin.
 
-- **macOS/Linux**: `~/.config/opencode/opencode.jsonc` (veya `~/.config/opencode/opencode.json`)
-- **macOS/Linux** (eski kurulumlar): `~/.local/share/opencode/opencode.jsonc`
-- **Windows**: `WIN+R` tuslayip `%USERPROFILE%\.config\opencode\opencode.jsonc` yapistirin
+- **macOS/Linux**: `~/.config/agenthorsy/agenthorsy.jsonc` (veya `~/.config/agenthorsy/agenthorsy.json`)
+- **macOS/Linux** (eski kurulumlar): `~/.local/share/agenthorsy/agenthorsy.jsonc`
+- **Windows**: `WIN+R` tuslayip `%USERPROFILE%\.config\opencode\agenthorsy.jsonc` yapistirin
 
 Plugin tanimliysa anahtari kaldirarak veya bos bir diziye cekerek gecici olarak devre disi birakin:
 
 ```jsonc
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://agenthorsy.ai/config.json",
   "plugin": [],
 }
 ```
@@ -75,7 +75,7 @@ Plugin tanimliysa anahtari kaldirarak veya bos bir diziye cekerek gecici olarak 
 opencode diskten yerel plugin de yukleyebilir. Bu dizinleri gecici olarak tasiyin (veya klasoru yeniden adlandirin) ve uygulamayi yeniden baslatin:
 
 - **Global plugins**
-  - **macOS/Linux**: `~/.config/opencode/plugins/`
+  - **macOS/Linux**: `~/.config/agenthorsy/plugins/`
   - **Windows**: `WIN+R` tuslayip `%USERPROFILE%\.config\opencode\plugins` yapistirin
 - **Project plugins** (sadece proje bazli config kullaniyorsaniz)
   - `<your-project>/.opencode/plugins/`
@@ -91,8 +91,8 @@ Pluginleri kapatmak ise yaramazsa (veya plugin kurulumu takili kaldiysa), openco
 1. opencode Desktop'u tamamen kapatin
 2. Cache dizinini silin:
 
-- **macOS**: Finder -> `Cmd+Shift+G` -> `~/.cache/opencode`
-- **Linux**: `~/.cache/opencode` dizinini silin (veya `rm -rf ~/.cache/opencode` calistirin)
+- **macOS**: Finder -> `Cmd+Shift+G` -> `~/.cache/agenthorsy`
+- **Linux**: `~/.cache/agenthorsy` dizinini silin (veya `rm -rf ~/.cache/agenthorsy` calistirin)
 - **Windows**: `WIN+R` tuslayip `%USERPROFILE%\.cache\opencode` yapistirin
 
 3. opencode Desktop'u yeniden baslatin
@@ -111,7 +111,7 @@ Ana ekranda sunucu adina (durum noktali) tiklayarak Server secicisini acin. **De
 
 #### Config'ten `server.port` / `server.hostname` kaldirin
 
-`opencode.json(c)` dosyanizda `server` bolumu varsa gecici olarak kaldirin ve desktop uygulamasini yeniden baslatin.
+`agenthorsy.json(c)` dosyanizda `server` bolumu varsa gecici olarak kaldirin ve desktop uygulamasini yeniden baslatin.
 
 #### Ortam degiskenlerini kontrol edin
 
@@ -177,7 +177,7 @@ opencode ile ilgili bir sorun yasiyorsaniz:
 
    Hata bildirmek veya ozellik talep etmek icin en iyi yol GitHub depomuzdur:
 
-   [**github.com/anomalyco/opencode/issues**](https://github.com/anomalyco/opencode/issues)
+   [**github.com/anomalyco/agenthorsy/issues**](https://github.com/anomalyco/agenthorsy/issues)
 
    Yeni issue acmadan once sorununuzun daha once raporlanip raporlanmadigini kontrol edin.
 
@@ -185,7 +185,7 @@ opencode ile ilgili bir sorun yasiyorsaniz:
 
    Gercek zamanli yardim ve topluluk sohbeti icin Discord sunucumuza katilin:
 
-   [**opencode.ai/discord**](https://opencode.ai/discord)
+   [**agenthorsy.ai/discord**](https://agenthorsy.ai/discord)
 
 ---
 
@@ -240,7 +240,7 @@ Cozum adimlari:
 2. Sorun surerse kayitli konfigurasyonu temizlemeyi deneyin:
 
    ```bash
-   rm -rf ~/.local/share/opencode
+   rm -rf ~/.local/share/agenthorsy
    ```
 
    Windows'ta `WIN+R` tuslayip su konumu silin: `%USERPROFILE%\.local\share\opencode`
@@ -258,12 +258,12 @@ Provider paket sorunlarini gidermek icin:
 1. Provider paket cache'ini temizleyin:
 
    ```bash
-   rm -rf ~/.cache/opencode
+   rm -rf ~/.cache/agenthorsy
    ```
 
    Windows'ta `WIN+R` tuslayip su konumu silin: `%USERPROFILE%\.cache\opencode`
 
-2. En guncel provider paketlerini yeniden kurmak icin opencode'u yeniden baslatin
+2. En guncel provider paketlerini yeniden kurmak icin agenthorsy'u yeniden baslatin
 
 Bu, opencode'un en yeni provider paket surumlerini indirmesini zorlar ve model parametresi/API degisikliklerinden kaynakli uyumsuzluklari cogu zaman cozer.
 

@@ -38,15 +38,15 @@ saklama alanının tek izolasyonuna bağlı `/share` özelliğidir.
 
 #### Konuşmaları paylaşma
 
-Bir kullanıcı `/share` özelliğini etkinleştirirse, görüşme ve onunla ilişkili veriler, bu paylaşım sayfalarını opencode.ai'de barındırmak için kullandığımız hizmete gönderilir.
+Bir kullanıcı `/share` özelliğini etkinleştirirse, görüşme ve onunla ilişkili veriler, bu paylaşım sayfalarını agenthorsy.ai'de barındırmak için kullandığımız hizmete gönderilir.
 
 Veriler şu anda CDN uç ağımız üzerinden sunuluyor ve kullanıcılarınızın yakınındaki uçta önbelleğe alınıyor.
 
 Deneme süreniz için bunu devre dışı bırakmanızı öneririz.
 
-```json title="opencode.json"
+```json title="agenthorsy.json"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://agenthorsy.ai/config.json",
   "share": "disabled"
 }
 ```
@@ -165,6 +165,6 @@ registry=https://your-company.jfrog.io/api/npm/npm-virtual/
 //your-company.jfrog.io/api/npm/npm-virtual/:_authToken=${NPM_AUTH_TOKEN}
 ```
 
-Paketlerin kurumsal kayıt defterinizden yüklenebildiğinden emin olmak için geliştiricilerin opencode'u çalıştırmadan önce özel kayıt defterinde oturum açmaları gerekir.
+Paketlerin kurumsal kayıt defterinizden yüklenebildiğinden emin olmak için geliştiricilerin agenthorsy'u çalıştırmadan önce özel kayıt defterinde oturum açmaları gerekir.
 
 </details>

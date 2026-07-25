@@ -122,7 +122,7 @@ XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://agenthorsy.ai/install | bash
 
 ### البناء فوق Horsy
 
-اذا كنت تعمل على مشروع مرتبط بـ Horsy ويستخدم "opencode" كجزء من اسمه (مثل "opencode-dashboard" او "opencode-mobile")، يرجى اضافة ملاحظة في README توضح انه ليس مبنيا بواسطة فريق Horsy ولا يرتبط بنا بأي شكل.
+اذا كنت تعمل على مشروع مرتبط بـ Horsy ويستخدم "opencode" كجزء من اسمه (مثل "agenthorsy-dashboard" او "agenthorsy-mobile")، يرجى اضافة ملاحظة في README توضح انه ليس مبنيا بواسطة فريق Horsy ولا يرتبط بنا بأي شكل.
 
 ---
 

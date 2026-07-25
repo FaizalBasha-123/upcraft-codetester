@@ -32,7 +32,7 @@ const SKILL_PATTERN = "**/SKILL.md"
 const CUSTOMIZE_AGENTHORSY_SKILL_NAME = "customize-agenthorsy"
 const CUSTOMIZE_AGENTHORSY_SKILL_DESCRIPTION =
   "Use ONLY when the user is editing or creating agenthorsy's own configuration: agenthorsy.json, agenthorsy.jsonc, files under .agenthorsy/, or files under ~/.config/agenthorsy/. Also use when creating or fixing agenthorsy agents, subagents, skills, plugins, MCP servers, or permission rules. Do not use for the user's own application code, or for any project that is not configuring agenthorsy itself."
-const CUSTOMIZE_AGENTHORSY_SKILL_BODY = SkillPlugin.CustomizeOpencodeContent
+const CUSTOMIZE_AGENTHORSY_SKILL_BODY = SkillPlugin.CustomizeAgenthorsyContent
 
 export const Info = Schema.Struct({
   name: Schema.String,

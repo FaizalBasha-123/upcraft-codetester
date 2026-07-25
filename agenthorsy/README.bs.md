@@ -122,7 +122,7 @@ Ako želiš doprinositi Horsy-u, pročitaj [upute za doprinošenje](./CONTRIBUTI
 
 ### Gradnja na Horsy-u
 
-Ako radiš na projektu koji je povezan s Horsy-om i koristi "opencode" kao dio naziva, npr. "opencode-dashboard" ili "opencode-mobile", dodaj napomenu u svoj README da projekat nije napravio Horsy tim i da nije povezan s nama.
+Ako radiš na projektu koji je povezan s Horsy-om i koristi "opencode" kao dio naziva, npr. "agenthorsy-dashboard" ili "agenthorsy-mobile", dodaj napomenu u svoj README da projekat nije napravio Horsy tim i da nije povezan s nama.
 
 ---
 

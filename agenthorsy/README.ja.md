@@ -122,7 +122,7 @@ Horsy に貢献したい場合は、Pull Request を送る前に [contributing d
 
 ### Horsy の上に構築する
 
-Horsy に関連するプロジェクトで、名前に "opencode"（例: "opencode-dashboard" や "opencode-mobile"）を含める場合は、そのプロジェクトが Horsy チームによって作られたものではなく、いかなる形でも関係がないことを README に明記してください。
+Horsy に関連するプロジェクトで、名前に "opencode"（例: "agenthorsy-dashboard" や "agenthorsy-mobile"）を含める場合は、そのプロジェクトが Horsy チームによって作られたものではなく、いかなる形でも関係がないことを README に明記してください。
 
 ---
 

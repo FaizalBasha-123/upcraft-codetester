@@ -1,8 +1,9 @@
-import { Effect } from "effect"
-import { existsSync } from "fs"
+import { Duration, Effect } from "effect"
+import { ChildProcess } from "effect/unstable/process"
+import { existsSync, readFileSync } from "fs"
 import path from "path"
 import { InstanceState } from "@/effect/instance-state"
-import { ChildProcessSpawner } from "@agenthorsy-ai/core/effect/child-process-spawner"
+import { AppProcess } from "@agenthorsy-ai/core/process"
 import { Config } from "@/config/config"
 
 export interface Hook {
@@ -24,7 +25,7 @@ function detectHooks(worktree: string): Hook[] {
 
   let pkg: Record<string, unknown> = {}
   try {
-    pkg = JSON.parse(require("fs").readFileSync(pkgPath, "utf-8"))
+    pkg = JSON.parse(readFileSync(pkgPath, "utf-8"))
   } catch {
     return hooks
   }
@@ -77,7 +78,7 @@ function loadConfiguredHooks(worktree: string): Hook[] {
   if (!existsSync(hooksFile)) return []
 
   try {
-    const raw = JSON.parse(require("fs").readFileSync(hooksFile, "utf-8"))
+    const raw = JSON.parse(readFileSync(hooksFile, "utf-8"))
     if (!Array.isArray(raw)) return []
     return raw.filter(
       (h): h is Hook =>
@@ -118,19 +119,19 @@ function matchesMatcher(toolID: string, matcher?: string): boolean {
 
 function runCommand(command: string, cwd: string): Effect.Effect<{ exitCode: number; stderr: string }> {
   return Effect.gen(function* () {
-    const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
-    const result = yield* spawner
-      .run(command, {
-        cwd,
-        timeout: 60_000,
-        env: { ...process.env, FORCE_COLOR: "0" },
-      })
-      .pipe(Effect.catch(() => Effect.succeed({ exitCode: 1, stdout: "", stderr: "hook command failed" })))
-
-    return {
-      exitCode: result.exitCode ?? 1,
-      stderr: result.stderr ?? "",
-    }
+    const appProcess = yield* AppProcess.Service
+    const result = yield* appProcess
+      .run(
+        ChildProcess.make("sh", ["-c", command], {
+          cwd,
+          env: { ...process.env, FORCE_COLOR: "0" },
+          stdout: "pipe",
+          stderr: "pipe",
+        }),
+        { timeout: Duration.seconds(60) },
+      )
+      .pipe(Effect.catch(() => Effect.succeed({ exitCode: 1, stderr: Buffer.from("hook command failed") })))
+    return { exitCode: result.exitCode, stderr: result.stderr.toString("utf8") }
   })
 }
 

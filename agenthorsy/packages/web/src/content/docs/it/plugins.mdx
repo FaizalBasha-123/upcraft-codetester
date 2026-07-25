@@ -1,9 +1,9 @@
 ---
 title: Plugin
-description: Scrivi plugin per estendere OpenCode.
+description: Scrivi plugin per estendere AgentHorsy.
 ---
 
-I plugin ti permettono di estendere OpenCode agganciandoti a vari eventi e personalizzando il comportamento. Puoi creare plugin per aggiungere nuove funzionalità, integrare servizi esterni o modificare il comportamento predefinito di OpenCode.
+I plugin ti permettono di estendere AgentHorsy agganciandoti a vari eventi e personalizzando il comportamento. Puoi creare plugin per aggiungere nuove funzionalità, integrare servizi esterni o modificare il comportamento predefinito di AgentHorsy.
 
 Per esempi, dai un'occhiata ai [plugin](/docs/ecosystem#plugins) creati dalla community.
 
@@ -20,7 +20,7 @@ Ci sono due modi per caricare i plugin.
 Metti file JavaScript o TypeScript nella directory dei plugin.
 
 - `.opencode/plugins/` - plugin a livello progetto
-- `~/.config/opencode/plugins/` - plugin globali
+- `~/.config/agenthorsy/plugins/` - plugin globali
 
 I file in queste directory vengono caricati automaticamente all'avvio.
 
@@ -30,9 +30,9 @@ I file in queste directory vengono caricati automaticamente all'avvio.
 
 Specifica i pacchetti npm nel tuo file di configurazione.
 
-```json title="opencode.json"
+```json title="agenthorsy.json"
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://agenthorsy.ai/config.json",
   "plugin": ["opencode-helicone-session", "opencode-wakatime", "@my-org/custom-plugin"]
 }
 ```
@@ -45,7 +45,7 @@ Sfoglia i plugin disponibili nell'[ecosistema](/docs/ecosystem#plugins).
 
 ### Come vengono installati i plugin
 
-I **plugin npm** vengono installati automaticamente usando Bun all'avvio. I pacchetti e le loro dipendenze vengono cache-ati in `~/.cache/opencode/node_modules/`.
+I **plugin npm** vengono installati automaticamente usando Bun all'avvio. I pacchetti e le loro dipendenze vengono cache-ati in `~/.cache/agenthorsy/node_modules/`.
 
 I **plugin locali** vengono caricati direttamente dalla directory dei plugin. Per usare pacchetti esterni, devi creare un `package.json` nella directory di configurazione (vedi [Dipendenze](#dependencies)) oppure pubblicare il plugin su npm e [aggiungerlo alla configurazione](/docs/config#plugins).
 
@@ -55,9 +55,9 @@ I **plugin locali** vengono caricati direttamente dalla directory dei plugin. Pe
 
 I plugin vengono caricati da tutte le sorgenti e tutti gli hook vengono eseguiti in sequenza. L'ordine di caricamento è:
 
-1. Config globale (`~/.config/opencode/opencode.json`)
-2. Config di progetto (`opencode.json`)
-3. Directory plugin globale (`~/.config/opencode/plugins/`)
+1. Config globale (`~/.config/agenthorsy/agenthorsy.json`)
+2. Config di progetto (`agenthorsy.json`)
+3. Directory plugin globale (`~/.config/agenthorsy/plugins/`)
 4. Directory plugin di progetto (`.opencode/plugins/`)
 
 I pacchetti npm duplicati con lo stesso nome e versione vengono caricati una sola volta. Tuttavia, un plugin locale e un plugin npm con nomi simili vengono entrambi caricati separatamente.
@@ -82,7 +82,7 @@ I plugin locali e gli strumenti personalizzati possono usare pacchetti npm ester
 }
 ```
 
-OpenCode esegue `bun install` all'avvio per installarle. I tuoi plugin e strumenti potranno poi importarle.
+AgentHorsy esegue `bun install` all'avvio per installarle. I tuoi plugin e strumenti potranno poi importarle.
 
 ```ts title=".opencode/plugins/my-plugin.ts"
 import { escape } from "shescape"
@@ -127,7 +127,7 @@ La funzione del plugin riceve:
 Per i plugin TypeScript, puoi importare i tipi dal pacchetto plugin:
 
 ```ts title="my-plugin.ts" {1}
-import type { Plugin } from "@opencode-ai/plugin"
+import type { Plugin } from "@agenthorsy-ai/plugin"
 
 export const MyPlugin: Plugin = async ({ project, client, $, directory, worktree }) => {
   return {
@@ -234,7 +234,7 @@ export const NotificationPlugin = async ({ project, client, $, directory, worktr
 Stiamo usando `osascript` per eseguire AppleScript su macOS. Qui lo usiamo per inviare notifiche.
 
 :::note
-Se usi l'app desktop di OpenCode, può inviare automaticamente notifiche di sistema quando una risposta è pronta o quando una sessione va in errore.
+Se usi l'app desktop di AgentHorsy, può inviare automaticamente notifiche di sistema quando una risposta è pronta o quando una sessione va in errore.
 :::
 
 ---
@@ -279,7 +279,7 @@ export const InjectEnvPlugin = async () => {
 I plugin possono anche aggiungere strumenti personalizzati a opencode:
 
 ```ts title=".opencode/plugins/custom-tools.ts"
-import { type Plugin, tool } from "@opencode-ai/plugin"
+import { type Plugin, tool } from "@agenthorsy-ai/plugin"
 
 export const CustomToolsPlugin: Plugin = async (ctx) => {
   return {
@@ -305,7 +305,7 @@ L'helper `tool` crea uno strumento personalizzato che opencode può chiamare. Ac
 - `args`: schema Zod per gli argomenti dello strumento
 - `execute`: funzione eseguita quando lo strumento viene chiamato
 
-I tuoi strumenti personalizzati saranno disponibili in opencode insieme agli strumenti integrati.
+I tuoi strumenti personalizzati saranno disponibili in agenthorsy insieme agli strumenti integrati.
 
 :::note
 Se uno strumento di un plugin usa lo stesso nome di uno strumento integrato, lo strumento del plugin ha la precedenza.
@@ -330,7 +330,7 @@ export const MyPlugin = async ({ client }) => {
 }
 ```
 
-Livelli: `debug`, `info`, `warn`, `error`. Vedi la [documentazione SDK](https://opencode.ai/docs/sdk) per i dettagli.
+Livelli: `debug`, `info`, `warn`, `error`. Vedi la [documentazione SDK](https://agenthorsy.ai/docs/sdk) per i dettagli.
 
 ---
 
@@ -339,7 +339,7 @@ Livelli: `debug`, `info`, `warn`, `error`. Vedi la [documentazione SDK](https://
 Personalizza il contesto incluso quando una sessione viene compattata:
 
 ```ts title=".opencode/plugins/compaction.ts"
-import type { Plugin } from "@opencode-ai/plugin"
+import type { Plugin } from "@agenthorsy-ai/plugin"
 
 export const CompactionPlugin: Plugin = async (ctx) => {
   return {
@@ -363,7 +363,7 @@ L'hook `experimental.session.compacting` scatta prima che l'LLM generi un riassu
 Puoi anche sostituire completamente il prompt di compaction impostando `output.prompt`:
 
 ```ts title=".opencode/plugins/custom-compaction.ts"
-import type { Plugin } from "@opencode-ai/plugin"
+import type { Plugin } from "@agenthorsy-ai/plugin"
 
 export const CustomCompactionPlugin: Plugin = async (ctx) => {
   return {

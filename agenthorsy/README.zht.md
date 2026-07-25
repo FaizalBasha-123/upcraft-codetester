@@ -121,7 +121,7 @@ Horsy 內建了兩種 Agent，您可以使用 `Tab` 鍵快速切換。
 
 ### 基於 Horsy 進行開發
 
-如果您正在開發與 Horsy 相關的專案，並在名稱中使用了 "opencode"（例如 "opencode-dashboard" 或 "opencode-mobile"），請在您的 README 中加入聲明，說明該專案並非由 Horsy 團隊開發，且與我們沒有任何隸屬關係。
+如果您正在開發與 Horsy 相關的專案，並在名稱中使用了 "opencode"（例如 "agenthorsy-dashboard" 或 "agenthorsy-mobile"），請在您的 README 中加入聲明，說明該專案並非由 Horsy 團隊開發，且與我們沒有任何隸屬關係。
 
 ---
 

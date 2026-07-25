@@ -122,7 +122,7 @@ Horsy'a katkıda bulunmak istiyorsanız, lütfen bir pull request göndermeden �
 
 ### Horsy Üzerine Geliştirme
 
-Horsy ile ilgili bir proje üzerinde çalışıyorsanız ve projenizin adının bir parçası olarak "opencode" kullanıyorsanız (örneğin, "opencode-dashboard" veya "opencode-mobile"), lütfen README dosyanıza projenin Horsy ekibi tarafından geliştirilmediğini ve bizimle hiçbir şekilde bağlantılı olmadığını belirten bir not ekleyin.
+Horsy ile ilgili bir proje üzerinde çalışıyorsanız ve projenizin adının bir parçası olarak "opencode" kullanıyorsanız (örneğin, "agenthorsy-dashboard" veya "agenthorsy-mobile"), lütfen README dosyanıza projenin Horsy ekibi tarafından geliştirilmediğini ve bizimle hiçbir şekilde bağlantılı olmadığını belirten bir not ekleyin.
 
 ---
 
