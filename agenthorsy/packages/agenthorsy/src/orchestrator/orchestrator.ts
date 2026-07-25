@@ -8,6 +8,7 @@ import { Todo } from "@/session/todo"
 import { Worktree } from "@/worktree"
 import { Glob } from "@agenthorsy-ai/core/util/glob"
 import { Provider } from "@/provider/provider"
+import { usable } from "@/session/overflow"
 import { MessageV2 } from "@/session/message-v2"
 import { Token } from "@/util/token"
 import { Config } from "@/config/config"
@@ -104,8 +105,6 @@ ${fileList}
   await fs.mkdir(`${rootDir}/database_metadata`, { recursive: true })
   await fs.writeFile(target, scaffold, "utf-8")
 }
-
-const CONTEXT_USAGE_THRESHOLD = 0.75
 
 const ORCHESTRATOR_COMPACTION_PROMPT = `Summarize the orchestrator session. Follow this structure:
 
@@ -423,6 +422,22 @@ export const loop = Effect.fn("Orchestrator.loop")(function* (
 
   for (let i = 0; i < tasks.length; i++) {
     const task = tasks[i]
+
+    // Pre-task overflow check — compact preemptively before starting task
+    if (i > 0) {
+      const freshMsgs = yield* sessions.messages({ sessionID }).pipe(Effect.orDie)
+      const lastUser = freshMsgs.findLast((m) => m.info.role === "user")
+      const model = lastUser?.info.model as Provider.Model | undefined
+      if (model && model.limit.context > 0) {
+        const usage = yield* estimateContextUsage(sessionID, sessions, model).pipe(Effect.catchAll(() => Effect.succeed(0)))
+        const cfg = yield* configService.get()
+        const budget = usable({ cfg, model })
+        if (budget > 0 && usage >= budget) {
+          yield* compactOrchestratorSession(sessionID, sessions, compaction, model)
+        }
+      }
+    }
+
     yield* injectTaskMarker(sessionID, task, undefined, i + 1, tasks.length, "running", sessions)
 
     const { activeChild, worktreeDir } = yield* findOrCreateAgent(task, metadata, sessions, worktreeService, todoService, sessionID)
@@ -450,7 +465,28 @@ export const loop = Effect.fn("Orchestrator.loop")(function* (
 
     yield* applyOrchestratorReminders(sessionID, activeChild.id, taskContext, hasDB)
 
-    const result = yield* runAgentLoop(activeChild.id, worktreeDir)
+    const result = yield* runAgentLoop(activeChild.id, worktreeDir).pipe(
+      Effect.catch((error) => {
+        if (SessionV1.ContextOverflowError.isInstance(error)) {
+          return Effect.gen(function* () {
+            yield* Effect.logWarning("orchestrator", {
+              "session.id": sessionID,
+              message: "ContextOverflowError from child agent, compacting orchestrator and retrying",
+              agentID: activeChild.id,
+              task: task.slice(0, 100),
+            })
+            const freshMsgs = yield* sessions.messages({ sessionID }).pipe(Effect.orDie)
+            const lastUser = freshMsgs.findLast((m) => m.info.role === "user")
+            const model = lastUser?.info.model as Provider.Model | undefined
+            if (model) {
+              yield* compactOrchestratorSession(sessionID, sessions, compaction, model)
+            }
+            return yield* runAgentLoop(activeChild.id, worktreeDir)
+          })
+        }
+        return Effect.fail(error)
+      }),
+    )
     results.push(result)
 
     // Extract completion data from agent's final response
@@ -473,11 +509,8 @@ export const loop = Effect.fn("Orchestrator.loop")(function* (
       if (model && model.limit.context > 0) {
         const usage = yield* estimateContextUsage(sessionID, sessions, model).pipe(Effect.catchAll(() => Effect.succeed(0)))
         const cfg = yield* configService.get()
-        const reserved = cfg.compaction?.reserved ?? 20_000
-        const usable = model.limit.input
-          ? Math.max(0, model.limit.input - reserved)
-          : Math.max(0, model.limit.context - (model.limit.output ?? 0))
-        if (usage >= usable * CONTEXT_USAGE_THRESHOLD) {
+        const budget = usable({ cfg, model })
+        if (budget > 0 && usage >= budget) {
           yield* compactOrchestratorSession(sessionID, sessions, compaction, model)
         }
       }
