@@ -242,6 +242,9 @@ export function SessionHeader() {
     reviewVisible: isDesktop(),
     reviewOpened: view().reviewPanel.opened(),
     onReviewToggle: () => view().reviewPanel.toggle(),
+    agentPanelVisible: isDesktop(),
+    agentPanelOpened: layout.agentPanel.opened(),
+    onAgentPanelToggle: () => layout.agentPanel.toggle(),
   }))
 
   const selectApp = (app: OpenApp) => {
@@ -524,6 +527,9 @@ type SessionHeaderV2ActionsState = {
   reviewVisible: boolean
   reviewOpened: boolean
   onReviewToggle: () => void
+  agentPanelVisible: boolean
+  agentPanelOpened: boolean
+  onAgentPanelToggle: () => void
 }
 
 function SessionHeaderV2Actions(props: { state: SessionHeaderV2ActionsState }) {
@@ -535,6 +541,25 @@ function SessionHeaderV2Actions(props: { state: SessionHeaderV2ActionsState }) {
         <Tooltip placement="bottom" value={props.state.statusLabel}>
           <StatusPopoverV2 />
         </Tooltip>
+      </Show>
+      <Show when={props.state.agentPanelVisible}>
+        <TooltipV2
+          class="shrink-0"
+          placement="bottom"
+          value="Agent Panel"
+        >
+          <IconButtonV2
+            type="button"
+            variant="ghost-muted"
+            size="large"
+            class="!w-9 shrink-0"
+            state={props.state.agentPanelOpened ? "pressed" : undefined}
+            onClick={props.state.onAgentPanelToggle}
+            aria-label="Agent Panel"
+            aria-expanded={props.state.agentPanelOpened}
+            icon={<IconV2 name="sidebar-right" />}
+          />
+        </TooltipV2>
       </Show>
       <Show when={props.state.reviewVisible}>
         <TooltipV2

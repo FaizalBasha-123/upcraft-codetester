@@ -27,6 +27,133 @@ interface OrchestratorMetadata {
   lastAggregatedSummary?: string
 }
 
+type TaskMarkerStatus = "running" | "completed" | "error"
+
+const COMPLEX_KEYWORDS = [
+  "refactor",
+  "migrate",
+  "redesign",
+  "restructure",
+  "reorganize",
+  "overhaul",
+  "rewrite",
+  "transform",
+  "modernize",
+  "architect",
+  "rethink",
+]
+
+const ACTION_VERBS = [
+  "add",
+  "create",
+  "implement",
+  "fix",
+  "refactor",
+  "update",
+  "change",
+  "modify",
+  "build",
+  "write",
+  "delete",
+  "remove",
+  "migrate",
+  "deploy",
+]
+
+function isComplexQuery(query: string): boolean {
+  const wordCount = query.split(/\s+/).length
+  if (wordCount > 50) return true
+
+  const lower = query.toLowerCase()
+  const verbCount = ACTION_VERBS.filter((verb) => lower.includes(verb)).length
+  if (verbCount > 1) return true
+
+  if (COMPLEX_KEYWORDS.some((kw) => lower.includes(kw))) return true
+
+  return false
+}
+
+function exploreAndBuildContext(
+  sessionID: SessionID,
+  taskDescription: string,
+  worktreeService: WorktreeMethods,
+  sessions: Session.Interface,
+) {
+  return Effect.gen(function* () {
+    const wtList = yield* worktreeService.list()
+    const rootDir = wtList[0]?.directory
+    if (!rootDir) return
+
+    const architectureDocs = [
+      "architecture/overview.md",
+      "architecture/modules.md",
+      "database_metadata/schema.md",
+    ]
+
+    const readResults = yield* Effect.tryPromise(() =>
+      import("node:fs/promises").then((fs) =>
+        Promise.all(
+          architectureDocs.map(async (doc) => {
+            try {
+              const content = await fs.readFile(`${rootDir}/${doc}`, "utf-8")
+              return { path: doc, content }
+            } catch {
+              return null
+            }
+          }),
+        ).then((results) => results.filter((r): r is { path: string; content: string } => r !== null)),
+      ),
+    ).pipe(Effect.catchAll(() => Effect.succeed([] as Array<{ path: string; content: string }>)))
+
+    for (const doc of readResults) {
+      yield* sessions.updatePart({
+        type: "text",
+        id: PartID.ascending(),
+        messageID: MessageID.ascending(),
+        sessionID,
+        text: `Architecture context: ${doc.path}\n\`\`\`\n${doc.content.slice(0, 2000)}\n\`\`\``,
+      })
+    }
+
+    yield* sessions.updatePart({
+      type: "text",
+      id: PartID.ascending(),
+      messageID: MessageID.ascending(),
+      sessionID,
+      text: `<orchestrator-context>\nThis is a complex query requiring multiple tasks. Architecture context has been gathered from existing documentation.\nQuery: ${taskDescription}\nExisting architecture docs: ${architectureDocs.join(", ")}\n</orchestrator-context>`,
+    })
+  })
+}
+
+function updateContextFiles(
+  sessionID: SessionID,
+  task: string,
+  result: SessionV1.WithParts,
+  worktreeService: WorktreeMethods,
+) {
+  return Effect.gen(function* () {
+    const wtList = yield* worktreeService.list()
+    const rootDir = wtList[0]?.directory
+    if (!rootDir) return
+
+    const resultText = result.parts
+      .filter((p): p is SessionV1.TextPart => p.type === "text")
+      .map((p) => p.text)
+      .join("\n")
+      .slice(0, 500)
+
+    yield* Effect.tryPromise(() =>
+      import("node:fs/promises").then(async (fs) => {
+        const dir = `${rootDir}/architecture`
+        await fs.mkdir(dir, { recursive: true })
+        const summaryPath = `${dir}/task-log.md`
+        const entry = `\n## ${new Date().toISOString()}\n- Task: ${task}\n- Summary: ${resultText}\n`
+        await fs.appendFile(summaryPath, entry, "utf-8")
+      }),
+    ).pipe(Effect.catchAll(() => Effect.void))
+  })
+}
+
 // Simple task decomposition heuristic
 function decomposeTasks(query: string): string[] {
   const sentences = query
@@ -36,27 +163,10 @@ function decomposeTasks(query: string): string[] {
 
   if (sentences.length <= 1) return [query]
 
-  const actionVerbs = [
-    "add",
-    "create",
-    "implement",
-    "fix",
-    "refactor",
-    "update",
-    "change",
-    "modify",
-    "build",
-    "write",
-    "delete",
-    "remove",
-    "migrate",
-    "deploy",
-  ]
-
   const tasks: string[] = []
   for (const sentence of sentences) {
     const lower = sentence.toLowerCase()
-    const hasActionVerb = actionVerbs.some((verb) => lower.startsWith(verb) || lower.includes(` ${verb} `))
+    const hasActionVerb = ACTION_VERBS.some((verb) => lower.startsWith(verb) || lower.includes(` ${verb} `))
     if (hasActionVerb) {
       tasks.push(sentence)
     }
@@ -142,13 +252,24 @@ export const loop = Effect.fn("Orchestrator.loop")(function* (
       .map((p) => p.text)
       .join(" ") || ""
 
+  // Auto-explore for complex queries before decomposition
+  if (isComplexQuery(taskDescription)) {
+    yield* exploreAndBuildContext(sessionID, taskDescription, worktreeService, sessions)
+  }
+
   const tasks = decomposeTasks(taskDescription)
   const metadata = (orchestratorSession.metadata as OrchestratorMetadata) || { tasks: [] }
 
   const results: SessionV1.WithParts[] = []
 
-  for (const task of tasks) {
+  for (let i = 0; i < tasks.length; i++) {
+    const task = tasks[i]
+    yield* injectTaskMarker(sessionID, task, undefined, i + 1, tasks.length, "running", sessions)
+
     const { activeChild, worktreeDir } = yield* findOrCreateAgent(task, metadata, sessions, worktreeService, todoService, sessionID)
+
+    // Update marker with actual child session ID
+    yield* injectTaskMarker(sessionID, task, activeChild.id, i + 1, tasks.length, "running", sessions)
 
     // Look up previous task completion for this agent
     const prevTask = metadata.tasks.findLast(
@@ -178,6 +299,12 @@ export const loop = Effect.fn("Orchestrator.loop")(function* (
     const filesModified = extractScope(task)?.split(", ") ?? []
 
     yield* updateTaskHistory(sessionID, task, activeChild.id, metadata, sessions, completionSummary, filesModified)
+
+    // Update architecture context files if applicable
+    yield* updateContextFiles(sessionID, task, result, worktreeService)
+
+    // Inject completion marker
+    yield* injectTaskMarker(sessionID, task, activeChild.id, i + 1, tasks.length, "completed", sessions, completionSummary.slice(0, 200))
   }
 
   // Result aggregation — store all results in orchestrator metadata
@@ -194,6 +321,8 @@ export const loop = Effect.fn("Orchestrator.loop")(function* (
       metadata: { ...metadata, lastAggregatedSummary: aggregatedSummary },
     })
     .pipe(Effect.orDie)
+
+  yield* injectCompletionSummary(sessionID, metadata.tasks, tasks.length, sessions)
 
   yield* compactIfNeeded(sessionID, allMsgs, sessions, compaction)
 
@@ -307,6 +436,96 @@ function sendTaskToAgent(agentID: SessionID, task: string, sessions: Session.Int
       messageID: userMsg.id,
       sessionID: agentID,
       text: task,
+    })
+  })
+}
+
+function injectTaskMarker(
+  sessionID: SessionID,
+  task: string,
+  childSessionID: SessionID | undefined,
+  taskIndex: number,
+  totalTasks: number,
+  status: TaskMarkerStatus,
+  sessions: Session.Interface,
+  completionSummary?: string,
+) {
+  return Effect.gen(function* () {
+    const markerMsgID = MessageID.ascending()
+
+    const userMsg: SessionV1.User = {
+      id: markerMsgID,
+      sessionID,
+      time: { created: Date.now() },
+      role: "user" as const,
+      agent: "orchestrator",
+      model: { providerID: "default" as any, modelID: "default" as any },
+    }
+    yield* sessions.updateMessage(userMsg as any)
+
+    yield* sessions.updatePart({
+      type: "tool",
+      id: PartID.ascending(),
+      messageID: markerMsgID,
+      sessionID,
+      callID: `orchestrator_task_${taskIndex}`,
+      tool: "orchestrator_task",
+      state: {
+        status,
+        input: {
+          description: task,
+          subagent_type: "dynamic_persona",
+          taskIndex,
+          totalTasks,
+        },
+        metadata: {
+          sessionId: childSessionID,
+          taskIndex,
+          totalTasks,
+          status,
+        },
+        ...(status === "completed"
+          ? { output: completionSummary ?? "completed", title: task, time: { start: Date.now(), end: Date.now() } }
+          : status === "error"
+            ? { error: completionSummary ?? "failed", time: { start: Date.now(), end: Date.now() } }
+            : { time: { start: Date.now() } }),
+      },
+    } satisfies SessionV1.ToolPart as any)
+  })
+}
+
+function injectCompletionSummary(
+  sessionID: SessionID,
+  tasks: TaskRecord[],
+  totalTasks: number,
+  sessions: Session.Interface,
+) {
+  return Effect.gen(function* () {
+    const summaryLines = tasks.map((t, i) => {
+      const status = t.status === "completed" ? "✅" : "❌"
+      const files = t.filesModified?.length ? ` (${t.filesModified.length} files)` : ""
+      return `- Task ${i + 1}: ${t.description} ${status}${files}`
+    })
+
+    const summaryText = `All ${totalTasks} tasks completed.\n\n${summaryLines.join("\n")}`
+
+    const msgID = MessageID.ascending()
+    const summaryMsg: SessionV1.User = {
+      id: msgID,
+      sessionID,
+      time: { created: Date.now() },
+      role: "user" as const,
+      agent: "orchestrator",
+      model: { providerID: "default" as any, modelID: "default" as any },
+    }
+    yield* sessions.updateMessage(summaryMsg as any)
+
+    yield* sessions.updatePart({
+      type: "text",
+      id: PartID.ascending(),
+      messageID: msgID,
+      sessionID,
+      text: summaryText,
     })
   })
 }

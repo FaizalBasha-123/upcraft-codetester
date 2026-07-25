@@ -81,6 +81,7 @@ import {
   sessionPanelWidthMax,
 } from "@/pages/session/session-panel-width"
 import { SessionSidePanel } from "@/pages/session/session-side-panel"
+import { AgentPanel } from "@/components/agent-panel"
 import { sessionPanelLayout } from "@/pages/session/session-panel-layout"
 import { SessionReviewEmptyChangesV2 } from "@agenthorsy-ai/session-ui/v2/session-review-empty-changes-v2"
 import { SessionReviewEmptyNoGitV2 } from "@agenthorsy-ai/session-ui/v2/session-review-empty-no-git-v2"
@@ -465,6 +466,7 @@ export default function Page() {
     newSessionDesign() ? desktopV2ReviewOpen() || desktopTerminalOpen() : desktopReviewOpen(),
   )
   const desktopSidePanelOpen = createMemo(() => desktopSessionResizeOpen() || desktopFileTreeOpen())
+  const agentPanelOpen = createMemo(() => layout.agentPanel.opened())
   let panelRow: HTMLDivElement | undefined
   const [panelRowWidth, setPanelRowWidth] = createSignal<number>()
   createResizeObserver(
@@ -2351,6 +2353,23 @@ export default function Page() {
             reviewSnap={ui.reviewSnap}
             size={size}
           />
+        </Show>
+        <Show when={agentPanelOpen()}>
+          <div class="h-full" style={{ width: `${layout.agentPanel.width()}px` }}>
+            <AgentPanel onClose={() => layout.agentPanel.close()} />
+          </div>
+          <div onPointerDown={() => size.start()}>
+            <ResizeHandle
+              classList={{
+                "-right-1": settings.general.newLayoutDesigns(),
+              }}
+              direction="horizontal"
+              size={layout.agentPanel.width()}
+              min={280}
+              max={500}
+              onResize={(width) => layout.agentPanel.resize(width)}
+            />
+          </div>
         </Show>
         <Show when={newSessionDesign()}>
           <Show when={isDesktop() ? desktopV2PanelLayout().visible : terminalOpen()}>

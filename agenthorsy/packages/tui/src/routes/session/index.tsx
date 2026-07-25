@@ -1758,6 +1758,9 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
         <Match when={display() === "task"}>
           <Task {...toolprops} />
         </Match>
+        <Match when={display() === "orchestrator_task"}>
+          <OrchestratorTask {...toolprops} />
+        </Match>
         <Match when={display() === "execute"}>
           <Execute {...toolprops} />
         </Match>
@@ -2308,6 +2311,60 @@ function Task(props: ToolProps) {
   )
 }
 
+function OrchestratorTask(props: ToolProps) {
+  const { theme } = useTheme()
+  const { navigate } = useRoute()
+  const sync = useSync()
+
+  onMount(() => {
+    const sessionID = stringValue(props.metadata.sessionId)
+    if (sessionID && !sync.data.message[sessionID]?.length) void sync.session.sync(sessionID)
+  })
+
+  const sessionID = createMemo(() => stringValue(props.metadata.sessionId))
+  const taskIndex = createMemo(() => numberValue(props.input.taskIndex) ?? 0)
+  const totalTasks = createMemo(() => numberValue(props.input.totalTasks) ?? 0)
+  const description = createMemo(() => stringValue(props.input.description) ?? "")
+  const isRunning = createMemo(() => props.part.state.status === "running")
+  const isCompleted = createMemo(() => props.part.state.status === "completed")
+  const isError = createMemo(() => props.part.state.status === "error")
+
+  const statusIcon = createMemo(() => {
+    if (isRunning()) return "🔨"
+    if (isCompleted()) return "✅"
+    if (isError()) return "❌"
+    return "⏸"
+  })
+
+  const content = createMemo(() => {
+    const parts: string[] = []
+    parts.push(`[Task ${taskIndex()}/${totalTasks()}] ${statusIcon()} ${description()}`)
+    if (isRunning()) parts.push("  Status: running...")
+    else if (isCompleted()) parts.push("  Status: ✅ completed")
+    else if (isError()) parts.push("  Status: ❌ error")
+    return parts.join("\n")
+  })
+
+  return (
+    <InlineTool
+      icon={statusIcon()}
+      separate={true}
+      color={isError() ? theme.error : isCompleted() ? theme.success : undefined}
+      spinner={isRunning()}
+      complete={description()}
+      pending="Starting task..."
+      part={props.part}
+      onClick={() => {
+        if (sessionID()) {
+          navigate({ type: "session", sessionID: sessionID()! })
+        }
+      }}
+    >
+      {content()}
+    </InlineTool>
+  )
+}
+
 export function formatSubagentToolcalls(count: number) {
   return `${count} toolcall${count === 1 ? "" : "s"}`
 }
@@ -2637,6 +2694,7 @@ const toolDisplays = new Set([
   "write",
   "edit",
   "task",
+  "orchestrator_task",
   "apply_patch",
   "todowrite",
   "question",
