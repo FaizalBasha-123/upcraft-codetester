@@ -36,6 +36,7 @@ import { Permission } from "@/permission"
 import { SessionStatus } from "./status"
 import { LLM } from "./llm"
 import { Shell } from "@agenthorsy-ai/core/shell"
+import { AppProcess } from "@agenthorsy-ai/core/process"
 import { ShellID } from "@/tool/shell/id"
 import { FSUtil } from "@agenthorsy-ai/core/fs-util"
 import { Truncate } from "@/tool/truncate"
@@ -1079,7 +1080,7 @@ const layer = Layer.effect(
       throw new Error("Impossible")
     })
 
-    const runLoop: (sessionID: SessionID, worktreeDir?: string) => Effect.Effect<SessionV1.WithParts> = Effect.fn("SessionPrompt.run")(
+    const runLoop: (sessionID: SessionID, worktreeDir?: string) => Effect.Effect<SessionV1.WithParts, never, AppProcess.Service | Config.Service> = Effect.fn("SessionPrompt.run")(
       function* (sessionID: SessionID, worktreeDir?: string) {
         const defaultCtx = yield* InstanceState.context
         const ctx = worktreeDir ? { ...defaultCtx, worktree: worktreeDir, directory: worktreeDir } : defaultCtx
@@ -1132,7 +1133,7 @@ const layer = Layer.effect(
             // PreStop hook — run lint/test before allowing agent to stop
             if (preStopRetryCount < MAX_PRESTOP_RETRIES) {
               const hookResult = yield* runPreStopHooks().pipe(
-                Effect.catch(() => Effect.succeed({ blocked: false } satisfies import("@/tool/hooks").HookResult)),
+                Effect.catch(() => Effect.succeed({ blocked: false, replacement: undefined, feedback: undefined } satisfies import("@/tool/hooks").HookResult)),
               )
               if (hookResult.feedback) {
                 preStopRetryCount++

@@ -1,0 +1,121 @@
+flowchart LR
+    subgraph Input["INPUT"]
+        IN1["webUrl, repoPath, config"]
+        IN2["vulnClasses, exploit flag"]
+        IN3["resumeFromWorkspace?"]
+        IN4["apiKey / providerConfig"]
+    end
+
+    subgraph Scope["SCOPE & INIT"]
+        S1["Validate repoPath<br/>reject path traversal"]
+        S2["Select Activity Proxy<br/>test / subscription / production"]
+        S3["Determine Scope<br/>selectedVulnClasses + exploit"]
+        S4["persistOrValidateRunScope<br/>session.json"]
+    end
+
+    subgraph Resume["RESUME (conditional)"]
+        R1["loadResumeState<br/>workspace + URL match"]
+        R2["restoreGitCheckpoint<br/>reset --hard + clean -fd"]
+        R3{"All agents done?"}
+        R4["Short-circuit: return completed"]
+    end
+
+    subgraph Preflight["STAGE 0: PREFLIGHT"]
+        P1["runPreflightValidation<br/>repo, config, URL, creds"]
+        P2["syncPlaywrightStealthConfig<br/>anti-detection browser config"]
+        P3["runAuthenticationValidation<br/>form/SSO login with TOTP"]
+        P4["initDeliverableGit<br/>private git repo + initial commit"]
+        P5["syncCodePathDenyRules<br/>~/.claude/settings.json"]
+    end
+
+    subgraph Phase1["STAGE 1: PRE-RECON"]
+        PR["Pre-Recon Agent (Opus)<br/>7 MCP tools → 10-section<br/>pre_recon_deliverable.md"]
+    end
+
+    subgraph Phase2["STAGE 2: RECON"]
+        RC["Recon Agent (Sonnet)<br/>9 MCP tools → 9-section<br/>recon_deliverable.md"]
+    end
+
+    subgraph Phase3["STAGE 3: VULNERABILITY ANALYSIS (Parallel ×5)"]
+        V1["Injection Vuln Agent"]
+        V2["XSS Vuln Agent"]
+        V3["Auth Vuln Agent"]
+        V4["SSRF Vuln Agent"]
+        V5["AuthZ Vuln Agent"]
+    end
+
+    subgraph QGate["QUEUE GATE (per class)"]
+        Q1["mergeFindingsIntoQueue<br/>SAST/external findings"]
+        Q2["checkExploitationQueue<br/>file existence + JSON schema<br/>+ vulnerabilities.length"]
+        Q3{"shouldExploit<br/>&& exploit<br/>enabled?"}
+        Q4["Skip exploitation<br/>for this class"]
+    end
+
+    subgraph Phase4["STAGE 4: EXPLOITATION (Parallel ×5, conditional)"]
+        E1["Injection Exploit Agent"]
+        E2["XSS Exploit Agent"]
+        E3["Auth Exploit Agent"]
+        E4["SSRF Exploit Agent"]
+        E5["AuthZ Exploit Agent"]
+    end
+
+    subgraph Phase5["STAGE 5: REPORTING"]
+        F1["assembleReportActivity<br/>concatenate deliverables"]
+        F2["Report Agent (Sonnet)<br/>executive summary"]
+        F3["injectReportMetadata<br/>model + cost info"]
+        F4["generateReportOutput<br/>PDF / JSON / SARIF"]
+        F5["comprehensive_security<br/>_assessment_report.md"]
+    end
+
+    IN1 & IN2 & IN3 & IN4 --> Scope
+    S1 --> S2 --> S3 --> S4
+
+    S4 --> Resume
+    S4 --> Preflight
+
+    R1 --> R2 --> R3
+    R3 -->|"yes"| R4
+    R3 -->|"no"| Preflight
+
+    P1 --> P2 --> P3 --> P4 --> P5
+    P5 --> Phase1 --> PR --> Phase2 --> RC
+
+    RC --> Phase3
+    V1 --> V1D["injection_analysis<br/>_deliverable.md<br/>+ queue.json"]
+    V2 --> V2D["xss_analysis<br/>_deliverable.md<br/>+ queue.json"]
+    V3 --> V3D["auth_analysis<br/>_deliverable.md<br/>+ queue.json"]
+    V4 --> V4D["ssrf_analysis<br/>_deliverable.md<br/>+ queue.json"]
+    V5 --> V5D["authz_analysis<br/>_deliverable.md<br/>+ queue.json"]
+
+    V1D & V2D & V3D & V4D & V5D --> QGate
+    Q1 --> Q2 --> Q3
+    Q3 -->|"Yes"| Phase4
+    Q3 -->|"No"| Q4
+
+    E1 --> E1D["injection_exploitation<br/>_evidence.md"]
+    E2 --> E2D["xss_exploitation<br/>_evidence.md"]
+    E3 --> E3D["auth_exploitation<br/>_evidence.md"]
+    E4 --> E4D["ssrf_exploitation<br/>_evidence.md"]
+    E5 --> E5D["authz_exploitation<br/>_evidence.md"]
+
+    E1D & E2D & E3D & E4D & E5D --> Phase5
+    Q4 --> Phase5
+    F1 --> F2 --> F3 --> F4 --> F5
+
+    classDef input fill:#95a5a6,stroke:#5d6d7e,color:#fff
+    classDef init fill:#7fb3d8,stroke:#2c5f8a,color:#111
+    classDef preflight fill:#f0b27a,stroke:#b87a14,color:#111
+    classDef sequential fill:#4a90d9,stroke:#2c5f8a,color:#fff
+    classDef parallel fill:#d9b3ff,stroke:#8b5cf6,color:#111
+    classDef gate fill:#ff6b6b,stroke:#c0392b,color:#fff
+    classDef deliverable fill:#f5a623,stroke:#b87a14,color:#111
+    classDef skip fill:#95a5a6,stroke:#5d6d7e,color:#fff
+
+    class IN1,IN2,IN3,IN4 input
+    class S1,S2,S3,S4 init
+    class P1,P2,P3,P4,P5 preflight
+    class PR,RC,F2 sequential
+    class V1,V2,V3,V4,V5,E1,E2,E3,E4,E5 parallel
+    class Q3 gate
+    class Q4 skip
+    class V1D,V2D,V3D,V4D,V5D,E1D,E2D,E3D,E4D,E5D,F5 deliverable

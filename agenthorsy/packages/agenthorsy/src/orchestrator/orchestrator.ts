@@ -36,6 +36,7 @@ interface OrchestratorMetadata {
 
 type TaskMarkerStatus = "running" | "completed" | "error"
 
+
 const ORCHESTRATOR_COMPACTION_PROMPT = `You are an orchestrator compaction assistant. Summarize the following delegation history into a concise anchor.
 
 ## Objective

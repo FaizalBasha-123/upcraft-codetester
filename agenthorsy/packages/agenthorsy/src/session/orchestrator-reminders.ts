@@ -53,6 +53,7 @@ export const applyOrchestratorReminders = Effect.fn("OrchestratorReminders.apply
       if (hasDatabaseCode) {
         parts.push(`MANDATORY: update /database_metadata/ if this task touched, added, or modified any database schema, table, column, relation, migration, or query. This is NOT optional — even if the user declines, you must update /database_metadata/schema.md with the current database structure.`)
       }
+      parts.push(`CRITICAL: Before marking this task done, read each modified file to verify changes exist. Never claim work is "already resolved" without file verification.`)
       directive = parts.join("\n")
     } else {
       // Fallback: extract from parent orchestrator's user message

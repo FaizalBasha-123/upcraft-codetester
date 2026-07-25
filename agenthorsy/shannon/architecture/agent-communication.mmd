@@ -1,0 +1,84 @@
+sequenceDiagram
+    participant T as Temporal Workflow
+    participant VA as Vuln Analysis Agent
+    participant MCP_V as MCP: vuln-collector
+    participant Q as exploitation_queue.json (Structured Output)
+    participant CS as ExploitationCheckerService
+    participant EA as Exploit Agent
+    participant MCP_E as MCP: exploit-collector
+    participant RA as Report Agent
+
+    Note over T,RA: DUAL-CHANNEL COMMUNICATION PATTERN
+    Note over VA,MCP_V: Channel 1: Qualitative Data via MCP Tools (Zod-validated sinks)
+    Note over VA,Q: Channel 2: Quantitative Data via Structured JSON (deterministic handoff)
+
+    T->>VA: Start {vulnType} analysis agent
+    activate VA
+
+    VA->>MCP_V: set_findings_summary(key_outcome, patterns[])
+    Note right of MCP_V: One-shot, rejects duplicates
+    VA->>MCP_V: set_strategic_intelligence(class-specific fields)
+    VA->>MCP_V: set_safe_vectors(subject, location, defense)
+    alt has blind spots (injection/xss/authz)
+        VA->>MCP_V: set_blind_spots(heading, description)
+    end
+
+    VA->>VA: Generate structured output
+    Note right of VA: Zod-validated JSON Schema (draft-07)<br/>LLM must conform or SDK forces retry
+
+    deactivate VA
+    T->>T: Get structured output from SDK result
+    T->>Q: Write {vulnType}_exploitation_queue.json
+    Note over Q: vulnerabilities[{ID, vulnerability_type,<br/>externally_exploitable, confidence,<br/>class-specific fields}]
+
+    T->>T: Deterministic Markdown rendering
+    Note right of T: renderVulnDeliverable() — pure function,<br/>no LLM involved, produces {type}_analysis_deliverable.md
+
+    T->>CS: checkExploitationQueue(vulnType)
+    activate CS
+    CS->>Q: Read queue file
+    Q-->>CS: JSON payload
+    CS->>CS: Validate JSON schema & file existence
+    CS-->>T: ExploitationDecision{shouldExploit, vulnerabilityCount}
+    deactivate CS
+
+    alt shouldExploit === true && exploit mode enabled
+        T->>EA: Start exploit agent with queue context
+        activate EA
+
+        Note over EA,MCP_E: EXPLOIT GUARDRAIL: Each add_exploit() call<br/>validates vulnerability_id against pre-approved validIds
+
+        EA->>MCP_E: add_exploit(status="exploited", vulnerability_id, title,<br/>vulnerable_location, exploitation_steps[], proof_of_impact)
+        MCP_E-->>EA: Accepted (ID matched validIds set)
+
+        EA->>MCP_E: add_exploit(status="blocked", vulnerability_id, title,<br/>vulnerable_location, current_blocker, what_we_tried[])
+        MCP_E-->>EA: Accepted (ID matched validIds set)
+
+        EA->>MCP_E: add_exploit(status="exploited", vulnerability_id="FAKE-99", ...)
+        MCP_E-->>EA: REJECTED: Unknown ID. Valid IDs: INJ-VULN-01, INJ-VULN-02, ... (8 shown)
+        Note over EA,MCP_E: Guardrail prevents hallucinated targets
+
+        deactivate EA
+        T->>T: Deterministic render exploitation evidence
+        Note right of T: renderExploitDeliverable() — sorts by severity,<br/>separates exploited vs blocked sections
+
+    else shouldExploit === false || exploit disabled
+        T->>T: Skip exploitation, move to reporting
+    end
+
+    T->>RA: Assemble report from all deliverables
+    activate RA
+    RA->>RA: Generate executive summary
+    deactivate RA
+    T->>T: Inject metadata + generate final output
+
+    Note over T,RA: EXTERNAL FINDINGS INJECTION (optional)
+    T->>CS: mergeFindingsIntoQueue(vulnType)
+    Note right of CS: SAST findings provider can inject<br/>additional vulnerabilities into queue<br/>before exploitation decision
+
+    Note over VA,EA: KEY DESIGN PROPERTIES:
+    Note over VA,EA: • Agents are stateless — no memory between phases
+    Note over VA,EA: • No shared chat history — handoff via filesystem only
+    Note over VA,EA: • MCP tools are data sinks — never read code
+    Note over VA,EA: • All outputs are deterministically rendered (no LLM for formatting)
+    Note over VA,EA: • Git checkpoints enable full rollback on hallucination

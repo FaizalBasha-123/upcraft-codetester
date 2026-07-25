@@ -1,0 +1,90 @@
+import { Effect } from "effect"
+import { SessionID, PartID } from "@/session/schema"
+import { SessionV1 } from "@agenthorsy-ai/core/v1/session"
+import { Session } from "@/session/session"
+
+export interface TaskContext {
+  description: string
+  scope?: string
+  expectedOutcome?: string
+  acceptanceCriteria?: string[]
+  previousTaskCompletion?: {
+    description: string
+    summary: string
+    filesModified: string[]
+  }
+}
+
+export const applyOrchestratorReminders = Effect.fn("OrchestratorReminders.apply")(function* (
+  orchestratorSessionID: SessionID,
+  agentSessionID: SessionID,
+  taskContext?: TaskContext,
+  hasDatabaseCode?: boolean,
+) {
+  const sessions = yield* Session.Service
+
+  // 1. Fetch child's recent messages
+  const childMessages = yield* sessions.messages({ sessionID: agentSessionID }).pipe(Effect.orDie)
+  const lastUserMsg = [...childMessages].reverse().find((m) => m.info.role === "user")
+
+  if (lastUserMsg) {
+    // 2. Build task-specific directive
+    let directive: string
+
+    if (taskContext) {
+      const parts: string[] = []
+
+      // Prepend previous task completion context if available
+      if (taskContext.previousTaskCompletion) {
+        const prev = taskContext.previousTaskCompletion
+        const prevParts = [`Completed: ${prev.description}`]
+        if (prev.filesModified.length > 0) prevParts.push(`Files modified: ${prev.filesModified.join(", ")}`)
+        if (prev.summary) prevParts.push(`Summary: ${prev.summary}`)
+        parts.push(`<previous-task-completion>\n${prevParts.join("\n")}\n</previous-task-completion>`)
+      }
+
+      parts.push(`Task: ${taskContext.description}`)
+      if (taskContext.scope) parts.push(`Scope: ${taskContext.scope}`)
+      if (taskContext.expectedOutcome) parts.push(`Expected outcome: ${taskContext.expectedOutcome}`)
+      if (taskContext.acceptanceCriteria?.length) {
+        parts.push(`Acceptance criteria:\n${taskContext.acceptanceCriteria.map((c) => `- ${c}`).join("\n")}`)
+      }
+      parts.push(`Before completing: update /architecture/ if this task changed architecture.`)
+      if (hasDatabaseCode) {
+        parts.push(`MANDATORY: update /database_metadata/ if this task touched, added, or modified any database schema, table, column, relation, migration, or query. This is NOT optional — even if the user declines, you must update /database_metadata/schema.md with the current database structure.`)
+      }
+      directive = parts.join("\n")
+    } else {
+      // Fallback: extract from parent orchestrator's user message
+      const parentMessages = yield* sessions.messages({ sessionID: orchestratorSessionID }).pipe(Effect.orDie)
+      if (parentMessages.length === 0) return
+
+      const parentUserMsg = parentMessages.find((m) => m.info.role === "user")
+      if (!parentUserMsg) return
+
+      directive = parentUserMsg.parts
+        .filter((p): p is SessionV1.TextPart => p.type === "text")
+        .map((p) => p.text)
+        .join("\n")
+    }
+
+    // 3. Read child's failure history from metadata
+    const childInfo = yield* sessions.get(agentSessionID).pipe(Effect.orDie)
+    const failures = (childInfo.metadata?.failures as any[]) || []
+    const failureContext =
+      failures.length > 0
+        ? `\n\n<failure-history>\nYou have previously failed this task ${failures.length} times. Latest failure reason: ${failures[failures.length - 1].reason}\n</failure-history>`
+        : ""
+
+    // 4. Inject context from orchestrator to agent
+    yield* sessions
+      .updatePart({
+        id: PartID.ascending(),
+        messageID: lastUserMsg.info.id,
+        sessionID: agentSessionID,
+        type: "text",
+        text: `\n\n<orchestrator-directive>\n${directive}\n</orchestrator-directive>${failureContext}`,
+      })
+      .pipe(Effect.orDie)
+  }
+})

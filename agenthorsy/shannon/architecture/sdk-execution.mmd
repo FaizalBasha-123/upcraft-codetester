@@ -1,0 +1,89 @@
+flowchart TB
+    subgraph Entry["runClaudePrompt()"]
+        ENV1["detectExecutionContext()<br/>parallel vs clean vs verbose"]
+        ENV2["createProgressManager()<br/>spinner or null object"]
+        ENV3["createAuditLogger()<br/>real session logger or null"]
+        ENV4["Build SDK Environment Variables"]
+    end
+
+    subgraph EnvConfig["ENVIRONMENT CONFIGURATION"]
+        E1["Provider config transforms:<br/>Bedrock → CLAUDE_CODE_USE_BEDROCK=1<br/>Vertex → CLAUDE_CODE_USE_VERTEX=1<br/>LiteLLM → ANTHROPIC_BASE_URL"]
+        E2["Passthrough env vars:<br/>ANTHROPIC_API_KEY, PATH, HOME<br/>AWS_REGION, GOOGLE_CREDENTIALS"]
+        E3["Tool config:<br/>PLAYWRIGHT_MCP_EXECUTABLE_PATH<br/>CLAUDE_CODE_MAX_OUTPUT_TOKENS=64000"]
+    end
+
+    subgraph SDKOptions["SDK OPTIONS CONFIGURATION"]
+        O1["Model resolution:<br/>providerOverrides → env → defaults<br/>Haiku(small) | Sonnet(medium) | Opus(large)"]
+        O2["Adaptive thinking:<br/>enabled for Opus 4.6/4.7/4.8"]
+        O3["maxTurns: 10000"]
+        O4["permissionMode: bypassPermissions<br/>allowDangerouslySkipPermissions: true"]
+        O5["outputFormat (vuln agents only)<br/>JSON Schema draft-07"]
+        O6["mcpServers: collector configs<br/>passed via SDK options"]
+    end
+
+    subgraph Stream["processMessageStream()"]
+        S1["SDK query() → async iterable"]
+        S2["Heartbeat every 30s<br/>no loader fallback"]
+        S3["Turn counting<br/>increment on 'assistant'"]
+        S4["dispatchMessage()<br/>routes by type+subtype"]
+    end
+
+    subgraph Dispatch["dispatchMessage() — Message Router"]
+        D1["'assistant' → handleAssistantMessage()<br/>structured error OR text-sniffing<br/>→ output formatted text"]
+        D2["'system' + 'init' → log model info"]
+        D3["'system' + 'model_refusal_fallback'<br/>→ audit Fable→Opus routing"]
+        D4["'tool_use' → handleToolUseMessage()<br/>→ audit logToolStart"]
+        D5["'tool_result' → handleToolResultMessage()<br/>→ audit logToolEnd"]
+        D6["'result' → handleResultMessage()<br/>→ capture cost, duration, structuredOutput"]
+        D7["'user', 'tool_progress',<br/>'tool_use_summary', 'auth_status'<br/>→ no-op, pass through"]
+    end
+
+    subgraph ErrorDetection["ERROR DETECTION (3 layers)"]
+        L1["Layer 1: Structured SDK Errors<br/>billing_error, rate_limit,<br/>authentication_failed, server_error,<br/>invalid_request, max_output_tokens,<br/>overloaded, model_not_found"]
+        L2["Layer 2: Text Sniffing<br/>detectApiError() checks for:<br/>'spending cap', 'budget exceeded',<br/>'usage limit', 'session limit'"]
+        L3["Layer 3: Behavioral Heuristic<br/>isSpendingCapBehavior():<br/>turns <= 2 && cost === 0<br/>&& matches billing text"]
+    end
+
+    subgraph PostStream["POST-STREAM PROCESSING"]
+        PS1["validateAgentOutput()<br/>general check + AGENT_VALIDATORS"]
+        PS2["Return ClaudePromptResult:<br/>success, duration, cost,<br/>turns, model, structuredOutput"]
+    end
+
+    subgraph ModelTiering["MODEL TIER RESOLUTION"]
+        MT1["'small' → Haiku 4.5<br/>env: ANTHROPIC_SMALL_MODEL<br/>summarization, extraction"]
+        MT2["'medium' → Sonnet 4.6 (default)<br/>env: ANTHROPIC_MEDIUM_MODEL<br/>tool use, general analysis"]
+        MT3["'large' → Opus 4.8<br/>env: ANTHROPIC_LARGE_MODEL<br/>deep reasoning, complex analysis"]
+    end
+
+    subgraph ProviderConfig["PROVIDER CONFIGURATION"]
+        PC1["anthropic_api: ANTHROPIC_API_KEY"]
+        PC2["bedrock: AWS region + credentials"]
+        PC3["vertex: GCP project + credentials"]
+        PC4["litellm_router: base URL + auth token"]
+        PC5["All support modelOverrides<br/>per-tier customization"]
+    end
+
+    Entry --> EnvConfig
+    EnvConfig --> SDKOptions
+    SDKOptions --> Stream
+    Stream --> Dispatch
+    Dispatch -->|"continue"| Stream
+    Dispatch -->|"throw (error)"| ErrorDetection
+    Dispatch -->|"complete"| PostStream
+
+    ErrorDetection -->|"retryable"| SDKOptions
+    ErrorDetection -->|"non-retryable"| PostStream
+
+    ModelTiering -.-> O1
+    ProviderConfig -.-> E1
+
+    note right of ErrorDetection
+        ERROR → RETRY MAPPING:
+        billing_error → retryable
+        rate_limit → retryable
+        server_error → retryable
+        spending cap → retryable
+        authentication → non-retryable
+        invalid_request → non-retryable
+        model_not_found → non-retryable
+    end note

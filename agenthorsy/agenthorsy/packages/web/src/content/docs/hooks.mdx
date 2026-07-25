@@ -1,0 +1,300 @@
+---
+title: Hooks
+description: Codex-style hooks for linting, formatting, and test validation.
+---
+
+Hooks are shell commands that run automatically at specific points in the agent lifecycle. They let you enforce code quality standards (linting, formatting, type checking) and run tests before the agent declares a task complete.
+
+---
+
+## Overview
+
+Hooks follow a Codex-style convention: shell commands are executed in the project worktree, and their exit codes determine whether the hook passes or fails. AgentHorsy auto-detects hooks from your project's `package.json` and can also be configured manually.
+
+---
+
+## Hook Events
+
+There are three hook events:
+
+| Event | When it runs | Purpose |
+|---|---|---|
+| `PreToolUse` | Before a tool executes | Validate inputs or block dangerous operations |
+| `PostToolUse` | After edit, write, or shell tools | Run linting, formatting, or type checking |
+| `PreStop` | Before the agent stops | Run tests to ensure changes work |
+
+---
+
+## Auto-Detection
+
+When no manual configuration exists, AgentHorsy scans your `package.json` to automatically set up hooks:
+
+### ESLint
+
+If `eslint` is found in `dependencies` or `devDependencies`:
+
+```json
+{
+  "event": "PostToolUse",
+  "matcher": "edit|write",
+  "command": "npx eslint $(git diff --name-only --diff-filter=AM 2>/dev/null | grep -E '\\.(ts|tsx|js|jsx)$') 2>&1 || exit 2"
+}
+```
+
+Runs ESLint on recently modified files after every edit or write operation.
+
+### Prettier
+
+If `prettier` is found in `dependencies` or `devDependencies`:
+
+```json
+{
+  "event": "PostToolUse",
+  "matcher": "edit|write",
+  "command": "npx prettier --check $(git diff --name-only --diff-filter=AM 2>/dev/null) 2>&1 || exit 2"
+}
+```
+
+Checks formatting on modified files after edits.
+
+### TypeScript
+
+If `tsconfig.json` exists in the worktree:
+
+```json
+{
+  "event": "PostToolUse",
+  "matcher": "edit|write",
+  "command": "npx tsc --noEmit 2>&1 || exit 2"
+}
+```
+
+Runs the TypeScript compiler in check mode after edits.
+
+### Test Runner
+
+If `vitest` is in devDependencies:
+
+```json
+{
+  "event": "PreStop",
+  "command": "npx vitest run 2>&1 || exit 2"
+}
+```
+
+Otherwise, if `jest` is in devDependencies or a non-echo `test` script exists:
+
+```json
+{
+  "event": "PreStop",
+  "command": "npm test 2>&1 || exit 2"
+}
+```
+
+Runs the full test suite before the agent can stop.
+
+---
+
+## Manual Configuration
+
+### File-based: `.agenthorsy/hooks.json`
+
+Place a hooks file in your project root:
+
+```json
+[
+  {
+    "event": "PostToolUse",
+    "matcher": "edit|write",
+    "command": "npx eslint --fix $(git diff --name-only --diff-filter=AM | grep -E '\\.(ts|tsx)$') 2>&1 || exit 2"
+  },
+  {
+    "event": "PreStop",
+    "command": "npx vitest run --reporter=verbose 2>&1 || exit 2"
+  }
+]
+```
+
+### Config-based: `agenthorsy.json`
+
+Add hooks to your AgentHorsy config file:
+
+```jsonc
+{
+  "hooks": [
+    {
+      "event": "PostToolUse",
+      "matcher": "edit|write",
+      "command": "npx eslint $(git diff --name-only --diff-filter=AM | grep -E '\\.(ts|tsx)$') 2>&1 || exit 2"
+    },
+    {
+      "event": "PreStop",
+      "command": "npx vitest run 2>&1 || exit 2"
+    }
+  ]
+}
+```
+
+### Precedence
+
+Hook sources are resolved in this order:
+
+1. `agenthorsy.json` config `hooks` array (highest priority)
+2. `.agenthorsy/hooks.json` file
+3. Auto-detected from `package.json` (lowest priority)
+
+If any higher-priority source provides hooks, lower-priority sources are ignored entirely.
+
+---
+
+## Exit Code Conventions
+
+Hooks use exit codes to communicate results:
+
+| Exit Code | Meaning | Behavior |
+|---|---|---|
+| `0` | Hook passed | Agent continues normally |
+| `2` | Hook failed | Errors injected into tool results or agent feedback |
+| `1` or crash | Treated as pass | Agent continues (hook failure is non-blocking) |
+
+Exit code 2 with non-empty stderr triggers the failure path. The stderr output (up to 4000 characters) is surfaced to the agent as context for fixing issues.
+
+---
+
+## Matcher Syntax
+
+The `matcher` field filters which tools trigger a hook. It uses pipe-delimited patterns:
+
+```json
+{
+  "matcher": "edit|write"
+}
+```
+
+This runs the hook after any tool whose ID contains `edit` or `write`. If no matcher is specified, the hook runs for all tool invocations of that event type.
+
+### Common matchers
+
+| Matcher | Triggers on |
+|---|---|
+| `edit|write` | File edit and write operations |
+| `bash` | Shell command execution |
+| `edit|write|bash` | Any file or shell operation |
+
+---
+
+## PostToolUse Hooks
+
+PostToolUse hooks run after file-editing tools complete. When a hook fails (exit code 2), the error output **replaces the tool's result** so the agent sees the lint/type errors directly:
+
+```typescript
+// In src/session/tools.ts
+const hookResult = yield* runPostToolUseHooks(item.id)
+if (hookResult.replacement) {
+  return { ...output, output: hookResult.replacement }
+}
+```
+
+This means the agent sees lint errors as if they were the tool output, enabling it to fix issues in the same turn.
+
+---
+
+## PreStop Hooks
+
+PreStop hooks run when the agent is about to declare a task complete. If a PreStop hook fails:
+
+1. The agent is **not allowed to stop**.
+2. A synthetic user message is injected with the hook's error output.
+3. The agent must fix the issues and try again.
+4. This retry cycle repeats up to **3 times** (`MAX_PRESTOP_RETRIES`).
+
+```typescript
+// In src/session/prompt.ts
+if (hookResult.feedback) {
+  preStopRetryCount++
+  // Inject feedback as system-reminder
+  text: `<system-reminder>\n${hookResult.feedback}\n</system-reminder>\n\nFix the above issues and try again. This is retry ${preStopRetryCount}/${MAX_PRESTOP_RETRIES}.`
+}
+```
+
+After 3 failed attempts, the agent stops regardless of hook status.
+
+---
+
+## Example Configurations
+
+### Minimal: just lint and test
+
+```json
+{
+  "hooks": [
+    {
+      "event": "PostToolUse",
+      "matcher": "edit|write",
+      "command": "npx eslint $(git diff --name-only --diff-filter=AM | grep -E '\\.(ts|tsx)$') 2>&1 || exit 2"
+    },
+    {
+      "event": "PreStop",
+      "command": "npx vitest run 2>&1 || exit 2"
+    }
+  ]
+}
+```
+
+### Full stack: lint, format, typecheck, and test
+
+```json
+{
+  "hooks": [
+    {
+      "event": "PostToolUse",
+      "matcher": "edit|write",
+      "command": "npx eslint $(git diff --name-only --diff-filter=AM | grep -E '\\.(ts|tsx|js|jsx)$') 2>&1 || exit 2"
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "edit|write",
+      "command": "npx prettier --check $(git diff --name-only --diff-filter=AM) 2>&1 || exit 2"
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "edit|write",
+      "command": "npx tsc --noEmit 2>&1 || exit 2"
+    },
+    {
+      "event": "PreStop",
+      "command": "npx vitest run 2>&1 || exit 2"
+    }
+  ]
+}
+```
+
+### Custom validation with PreToolUse
+
+```json
+{
+  "hooks": [
+    {
+      "event": "PreToolUse",
+      "command": "echo 'Validating environment...' && test -f .env.local || echo 'Missing .env.local'"
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "edit|write",
+      "command": "cargo clippy -- -D warnings 2>&1 || exit 2"
+    },
+    {
+      "event": "PreStop",
+      "command": "cargo test 2>&1 || exit 2"
+    }
+  ]
+}
+```
+
+---
+
+## See Also
+
+- [Agents](/docs/agents) - Agent types and their permissions
+- [Orchestrator](/docs/orchestrator) - Task decomposition and agent dispatch
+- [Config](/docs/config) - Full configuration reference

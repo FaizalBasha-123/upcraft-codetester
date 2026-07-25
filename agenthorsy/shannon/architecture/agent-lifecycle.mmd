@@ -1,0 +1,132 @@
+stateDiagram-v2
+    [*] --> LoadConfig: execute(agentName, input, auditSession)
+
+    state LoadConfig {
+        [*] --> TrySources: configData > configYAML > configPath
+        TrySources --> ConfigLoaded
+        TrySources --> ConfigError: all sources fail
+    }
+
+    LoadConfig --> LoadPrompt: success
+
+    state LoadPrompt {
+        [*] --> ResolveTemplate: AGENTS[agentName].promptTemplate
+        ResolveTemplate --> InterpolateVars: {{WEB_URL}}, {{REPO_PATH}}, {{AUTH_STATE_FILE}}
+        InterpolateVars --> ApplyIncludes: @include() directives
+        ApplyIncludes --> InjectSharedSubprompts: shared rules, scope, instructions
+        InjectSharedSubprompts --> PromptReady
+        InjectSharedSubprompts --> PromptError: template not found
+    }
+
+    LoadPrompt --> CreateGitCheckpoint: prompt ready
+
+    CreateGitCheckpoint --> GitCheckpointDone: git add -A + commit
+    CreateGitCheckpoint --> GitCheckpointFailed: git error
+    GitCheckpointFailed --> [*]: non-retryable PentestError
+
+    GitCheckpointDone --> StartAuditLogging
+
+    StartAuditLogging --> AuditStarted: save prompt snapshot + start timer
+    StartAuditLogging --> AuditError
+
+    AuditStarted --> ExecuteViaSDK
+
+    state ExecuteViaSDK {
+        [*] --> BuildSDKEnv: set env vars for provider + tools
+        BuildSDKEnv --> ConfigureSDKOptions: model, maxTurns=10000
+        ConfigureSDKOptions --> AttachMCP: mcpServers config
+        AttachMCP --> SetStructuredOutput: outputFormat for vuln agents
+        SetStructuredOutput --> StreamMessages: SDK query()
+        StreamMessages --> StreamDone: processMessageStream
+        StreamMessages --> StreamError: SDK/network error
+    }
+
+    ExecuteViaSDK --> SpendingCapCheck: stream done
+
+    state SpendingCapCheck {
+        [*] --> CheckHeuristic: turns <= 2 && cost === 0
+        CheckHeuristic --> CapDetected: matches billing text patterns
+        CheckHeuristic --> CapPassed: normal execution
+        CapDetected --> [*]: retryable billing error
+    }
+
+    SpendingCapCheck --> HandleResult: CapPassed
+
+    state HandleResult {
+        [*] --> EvaluateSuccess
+        state EvaluateSuccess {
+            [*] --> SuccessPath: result.success === true
+            [*] --> FailurePath: result.success === false
+        }
+
+        SuccessPath --> WriteStructuredOutput
+        FailurePath --> FailAgent: AGENT_EXECUTION_FAILED
+    }
+
+    state WriteStructuredOutput {
+        [*] --> CheckQueueSchema: is vuln agent?
+        CheckQueueSchema --> WriteQueue: yes → {type}_exploitation_queue.json
+        CheckQueueSchema --> SkipWrite: no → pre-recon/recon/exploit/report
+    }
+
+    WriteStructuredOutput --> ValidateOutput
+
+    state ValidateOutput {
+        [*] --> CheckGeneral: result.success && (result || structuredOutput)
+        CheckGeneral --> GeneralPass
+        CheckGeneral --> GeneralFail
+        GeneralPass --> CheckAgentSpecific: AGENT_VALIDATORS[agentName]
+        CheckAgentSpecific --> ValidatorPass: exists + passes
+        CheckAgentSpecific --> ValidatorWarn: no validator defined (graceful)
+        CheckAgentSpecific --> ValidatorFail: queue/deliverable missing
+    }
+
+    ValidateOutput --> RenderDeliverable: validation passes
+
+    state RenderDeliverable {
+        [*] --> CallWriteHook: writeDeliverable(deliverablesPath)
+        CallWriteHook --> DeterministicRender: pure function, no LLM
+        DeterministicRender --> MarkdownWritten
+        MarkdownWritten --> DeliverableRendered
+    }
+
+    RenderDeliverable --> GitCommitSuccess: deliverable on disk
+
+    GitCommitSuccess --> CommitHashCaptured: capture for checkpoint
+    CommitHashCaptured --> AuditEndAgent: mutex-protected metrics update
+    AuditEndAgent --> [*]: return ok(AgentEndResult)
+
+    FailAgent --> GitRollback: git reset --hard + clean -fd
+    GitRollback --> RollbackDone: workspace pristine
+    RollbackDone --> AuditEndAgent
+    AuditEndAgent --> [*]: return err(PentestError)
+
+    state AgentEndResult {
+        duration_ms
+        cost_usd
+        success: boolean
+        model: string
+        checkpoint?: commitHash
+    }
+
+    note right of ValidateOutput
+        AGENT_VALIDATORS:
+        • pre-recon → always true
+        • recon → always true
+        • injection/xss/auth/ssrf/authz-vuln
+          → check {type}_exploitation_queue.json exists
+        • injection/xss/auth/ssrf/authz-exploit
+          → always true
+        • report → check report file exists
+    end note
+
+    note right of CreateGitCheckpoint
+        GIT CHECKPOINTING:
+        • Before agent: staged snapshot
+        • On failure: git reset --hard
+          to rollback workspace
+        • On success: git commit
+          capturing checkpoint hash
+        • Resume: restore checkpoint,
+          delete partial deliverables
+    end note
