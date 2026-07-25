@@ -1,0 +1,33 @@
+{
+  "$schema": "https://v2-8-13.turborepo.dev/schema.json",
+  "globalEnv": ["CI", "AGENTHORSY_DISABLE_SHARE"],
+  "globalPassThroughEnv": ["CI", "AGENTHORSY_DISABLE_SHARE"],
+  "tasks": {
+    "typecheck": {},
+    "build": {
+      "dependsOn": [],
+      "outputs": ["dist/**"]
+    },
+    "agenthorsy#test": {
+      "dependsOn": ["^build"],
+      "outputs": [],
+      "passThroughEnv": ["*"]
+    },
+    "@agenthorsy-ai/core#test": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "@agenthorsy-ai/app#test": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "@agenthorsy-ai/ui#test": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "@agenthorsy-ai/session-ui#test": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    }
+  }
+}

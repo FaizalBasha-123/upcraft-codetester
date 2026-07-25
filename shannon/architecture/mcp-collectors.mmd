@@ -1,0 +1,72 @@
+flowchart LR
+    subgraph PreReconMCP["pre-recon-collector (7 one-shot tools)"]
+        PR1["set_executive_summary<br/>→ §1 Security Posture"]
+        PR2["set_application_intelligence<br/>→ §2,4,5,6 Architecture, Data,<br/>Attack Surface, Infrastructure"]
+        PR3["set_auth_deep_dive<br/>→ §3 Auth & AuthZ Deep Dive"]
+        PR4["set_codebase_indexing<br/>→ §7 Codebase Indexing"]
+        PR5["set_critical_file_paths<br/>→ §8 Critical File Catalog"]
+        PR6["set_xss_sinks<br/>→ §9 XSS by Render Context<br/>(html_body, attribute, js, css, url)"]
+        PR7["set_ssrf_sinks<br/>→ §10 SSRF by Category<br/>(clients, sockets, importers, etc.)"]
+    end
+
+    subgraph ReconMCP["recon-collector (8 one-shot + 1 multi-call)"]
+        R1["set_executive_summary<br/>→ §1 App Overview"]
+        R2["set_technology_stack<br/>→ §2 Tech & Service Map"]
+        R3["set_authentication<br/>→ §3 Auth Flow (3 subsections)"]
+        R4["add_endpoints (MULTI-CALL)<br/>→ §4 API Inventory<br/>deduplicates (method, path)"]
+        R5["set_input_vectors<br/>→ §5 URL params, POST body,<br/>Headers, Cookies"]
+        R6["set_network_map<br/>→ §6 Entities, Flows,<br/>Guards Directory"]
+        R7["set_role_architecture<br/>→ §7 Roles & Privilege Lattice"]
+        R8["set_authz_candidates<br/>→ §8 Horiz/Vert/Context<br/>AuthZ Candidates"]
+        R9["set_injection_sources<br/>→ §9 Injection Sources<br/>by class (cmd, sql, lfi, ssti)"]
+    end
+
+    subgraph VulnMCP["vuln-collector (3-4 tools per class × 5 classes)"]
+        V_ALL["Factory: createVulnCollector(vulnClass)"]
+        V1["set_findings_summary (REQUIRED)<br/>→ §1-2 Key Outcome + Patterns"]
+        V2["set_strategic_intelligence (REQUIRED)<br/>→ §3 Per-class schema:<br/>Injection: WAF, DB engine<br/>XSS: CSP, cookie flags<br/>Auth: JWT, session, password<br/>SSRF: HTTP lib, redirects<br/>AuthZ: RBAC, ownership"]
+        V3["set_safe_vectors<br/>→ §4 Confirmed Secure"]
+        V4["set_blind_spots<br/>→ §5 (injection/xss/authz only)"]
+    end
+
+    subgraph ExploitMCP["exploit-collector (1 tool, multi-call per vuln)"]
+        E1["Factory: createExploitCollector({<br/>vulnClass,<br/>validIds: Set<string><br/>})"]
+        E2["add_exploit(vulnerability_id, title,<br/>vulnerable_location, status, ...)"]
+        E3{"ID validation<br/>against queue<br/>validIds set"}
+        E4["IdRejected: retry with<br/>valid ID list (preview 8)"]
+        E5["IdValid: record verdict<br/>status=exploited | blocked | OOS"]
+    end
+
+    subgraph Renderers["DETERMINISTIC MARKDOWN RENDERERS"]
+        REN1["renderPreRecon(data)<br/>→ pre_recon_deliverable.md<br/>10 sections"]
+        REN2["renderRecon(data)<br/>→ recon_deliverable.md<br/>9 sections"]
+        REN3["renderVulnDeliverable(class, data)<br/>→ {class}_analysis_deliverable.md<br/>5 sections"]
+        REN4["renderExploitDeliverable(class, state, idToType)<br/>→ {class}_exploitation_evidence.md<br/>Exploited + Blocked sections"]
+    end
+
+    PR1 & PR2 & PR3 & PR4 & PR5 & PR6 & PR7 -->|getAll() + getCallStatus()| REN1
+    R1 & R2 & R3 & R4 & R5 & R6 & R7 & R8 & R9 -->|getAll() + getCallStatus()| REN2
+    V_ALL --> V1 & V2 & V3 & V4
+    V1 & V2 & V3 & V4 -->|getAll()| REN3
+    E1 --> E2 --> E3
+    E3 -->|"valid"| E5 -->|getAll()| REN4
+    E3 -->|"invalid"| E4
+
+    note right of E3
+        EXPLOIT GUARDRAIL:
+        vulnerability_id must be in
+        the pre-approved validIds set
+        from exploitation_queue.json
+        Prevents hallucinated targets
+    end note
+
+    note right of V2
+        STRATEGIC INTEL VARIANTS:
+        Each vuln class has a unique
+        schema for §3:
+        • Injection: WAF, DB engine
+        • XSS: CSP, cookie security
+        • Auth: JWT, session TTL
+        • SSRF: HTTP lib, internal svc
+        • AuthZ: RBAC, ownership
+    end note
