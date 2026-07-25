@@ -6,6 +6,7 @@ import { SessionCompaction } from "@/session/compaction"
 import { applyOrchestratorReminders, type TaskContext } from "@/session/orchestrator-reminders"
 import { Todo } from "@/session/todo"
 import { Worktree } from "@/worktree"
+import { Glob } from "@agenthorsy-ai/core/util/glob"
 
 type WorktreeMethods = Pick<Worktree.Interface, "list" | "create">
 type TodoMethods = Pick<Todo.Interface, "get">
@@ -28,6 +29,77 @@ interface OrchestratorMetadata {
 }
 
 type TaskMarkerStatus = "running" | "completed" | "error"
+
+const DB_STRONG_PATTERNS = ["**/*.sql.ts", "**/drizzle.config.*"]
+const DB_MEDIUM_PATTERNS = ["**/migrations/**/*.sql"]
+const DB_WEAK_PATTERNS = [
+  "**/prisma/**",
+  "**/schema.prisma",
+  "**/*.entity.ts",
+  "**/*.model.ts",
+  "**/*.schema.ts",
+  "**/schema.sql",
+]
+const DB_PACKAGE_KEYWORDS = ["drizzle-orm", "drizzle-kit", "prisma", "@prisma/client", "typeorm", "knex", "sequelize", "mongoose"]
+
+async function detectDatabaseCode(rootDir: string): Promise<boolean> {
+  let score = 0
+
+  for (const pattern of DB_STRONG_PATTERNS) {
+    const matches = await Glob.scan(pattern, { cwd: rootDir, include: "file" })
+    if (matches.length > 0) score += 3
+  }
+
+  if (score >= 2) return true
+
+  for (const pattern of DB_MEDIUM_PATTERNS) {
+    const matches = await Glob.scan(pattern, { cwd: rootDir, include: "file" })
+    if (matches.length > 0) score += 2
+  }
+
+  if (score >= 2) return true
+
+  for (const pattern of DB_WEAK_PATTERNS) {
+    const matches = await Glob.scan(pattern, { cwd: rootDir, include: "file" })
+    if (matches.length > 0) score += 1
+  }
+
+  try {
+    const fs = await import("node:fs/promises")
+    const pkgRaw = await fs.readFile(`${rootDir}/package.json`, "utf-8")
+    const pkg = JSON.parse(pkgRaw)
+    const allDeps = { ...pkg.dependencies, ...pkg.devDependencies }
+    const hasDBDep = DB_PACKAGE_KEYWORDS.some((kw) => kw in allDeps)
+    if (hasDBDep) score += 2
+  } catch {}
+
+  return score >= 2
+}
+
+async function scaffoldDatabaseMetadata(rootDir: string): Promise<void> {
+  const fs = await import("node:fs/promises")
+  const target = `${rootDir}/database_metadata/schema.md`
+  try {
+    await fs.access(target)
+    return
+  } catch {}
+
+  const sqlTsFiles = await Glob.scan("**/*.sql.ts", { cwd: rootDir, include: "file" })
+  const fileList = sqlTsFiles.length > 0
+    ? sqlTsFiles.map((f) => `- \`${f}\``).join("\n")
+    : "_No schema files detected yet._"
+
+  const scaffold = `# Database Schema
+
+> Auto-generated scaffold. Agent will populate after first DB-related task.
+
+## Tables
+
+${fileList}
+`
+  await fs.mkdir(`${rootDir}/database_metadata`, { recursive: true })
+  await fs.writeFile(target, scaffold, "utf-8")
+}
 
 const COMPLEX_KEYWORDS = [
   "refactor",
@@ -78,6 +150,7 @@ function exploreAndBuildContext(
   taskDescription: string,
   worktreeService: WorktreeMethods,
   sessions: Session.Interface,
+  hasDB: boolean,
 ) {
   return Effect.gen(function* () {
     const wtList = yield* worktreeService.list()
@@ -87,7 +160,7 @@ function exploreAndBuildContext(
     const architectureDocs = [
       "architecture/overview.md",
       "architecture/modules.md",
-      "database_metadata/schema.md",
+      ...(hasDB ? ["database_metadata/schema.md"] : []),
     ]
 
     const readResults = yield* Effect.tryPromise(() =>
@@ -252,9 +325,17 @@ export const loop = Effect.fn("Orchestrator.loop")(function* (
       .map((p) => p.text)
       .join(" ") || ""
 
+  // Detect database code in the codebase
+  const wtList = yield* worktreeService.list()
+  const rootDir = wtList[0]?.directory
+  const hasDB = rootDir ? yield* Effect.tryPromise(() => detectDatabaseCode(rootDir)).pipe(Effect.catchAll(() => Effect.succeed(false))) : false
+  if (hasDB && rootDir) {
+    yield* Effect.tryPromise(() => scaffoldDatabaseMetadata(rootDir)).pipe(Effect.catchAll(() => Effect.void))
+  }
+
   // Auto-explore for complex queries before decomposition
   if (isComplexQuery(taskDescription)) {
-    yield* exploreAndBuildContext(sessionID, taskDescription, worktreeService, sessions)
+    yield* exploreAndBuildContext(sessionID, taskDescription, worktreeService, sessions, hasDB)
   }
 
   const tasks = decomposeTasks(taskDescription)
@@ -289,7 +370,7 @@ export const loop = Effect.fn("Orchestrator.loop")(function* (
         : undefined,
     }
 
-    yield* applyOrchestratorReminders(sessionID, activeChild.id, taskContext)
+    yield* applyOrchestratorReminders(sessionID, activeChild.id, taskContext, hasDB)
 
     const result = yield* runAgentLoop(activeChild.id, worktreeDir)
     results.push(result)

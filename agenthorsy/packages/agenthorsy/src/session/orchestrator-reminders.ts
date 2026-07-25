@@ -19,6 +19,7 @@ export const applyOrchestratorReminders = Effect.fn("OrchestratorReminders.apply
   orchestratorSessionID: SessionID,
   agentSessionID: SessionID,
   taskContext?: TaskContext,
+  hasDatabaseCode?: boolean,
 ) {
   const sessions = yield* Session.Service
 
@@ -48,7 +49,10 @@ export const applyOrchestratorReminders = Effect.fn("OrchestratorReminders.apply
       if (taskContext.acceptanceCriteria?.length) {
         parts.push(`Acceptance criteria:\n${taskContext.acceptanceCriteria.map((c) => `- ${c}`).join("\n")}`)
       }
-      parts.push(`Before completing: update /architecture/ and /database_metadata/ if this task changed architecture or schemas.`)
+      parts.push(`Before completing: update /architecture/ if this task changed architecture.`)
+      if (hasDatabaseCode) {
+        parts.push(`MANDATORY: update /database_metadata/ if this task touched, added, or modified any database schema, table, column, relation, migration, or query. This is NOT optional — even if the user declines, you must update /database_metadata/schema.md with the current database structure.`)
+      }
       directive = parts.join("\n")
     } else {
       // Fallback: extract from parent orchestrator's user message

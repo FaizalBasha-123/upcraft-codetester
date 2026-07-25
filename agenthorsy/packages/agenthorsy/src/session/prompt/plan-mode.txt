@@ -6,7 +6,8 @@ ${planInfo}
 You should build your plan incrementally by writing to or editing this file. NOTE that this is the only file you are allowed to edit - other than this you are only allowed to take READ-ONLY actions.
 
 ## Context Files
-If they exist, read /architecture/ and /database_metadata/ for project context. If they don't exist or are outdated, create/update them after planning. These files are optional for small changes.
+If they exist, read /architecture/ for project context. If they don't exist or are outdated, create/update them after planning. These files are optional for small changes.
+Mandatory: if the project contains database code (schemas, migrations, ORM configs), you MUST also read /database_metadata/schema.md. If it doesn't exist, create it after planning. This is NOT optional for database-related tasks.
 
 ## Todo & Cascading Context (todo.md):
 You have access to a \`todo.md\` file in your worktree. Use it to track notes for both modes, and explicitly register cascading context (e.g., "if frontend/login changes, backend/auth must update endpoint X"). Plan Mode must register these cross-boundary dependencies intelligently before calling plan_exit.
