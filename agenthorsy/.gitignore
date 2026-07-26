@@ -55,13 +55,19 @@ Thumbs.db
 *.swp
 
 # Nested git repos (tracked independently)
-deepagents/.git
-grok-build/.git
-horsy/.git
-oh-my-openagent/.git
-opencode-repo/.git
-shannon/.git
-strix/.git
+deepagents/
+grok-build/
+horsy/
+oh-my-openagent/
+opencode-repo/
+shannon/
+strix/
+upcraft-pentester/
+agenthorsy/agenthorsy/
+architecture/
+.agents/
+omo-system-design.md
+opencode-system-design.md
 .git_backup
 
 # Aider
