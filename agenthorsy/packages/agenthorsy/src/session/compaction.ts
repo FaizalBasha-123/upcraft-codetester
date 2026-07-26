@@ -22,6 +22,7 @@ import { ProviderV2 } from "@agenthorsy-ai/core/provider"
 import { ModelV2 } from "@agenthorsy-ai/core/model"
 import { buildPrompt } from "@agenthorsy-ai/core/session/compaction"
 import { SessionCompactionEvent } from "@agenthorsy-ai/schema/session-compaction-event"
+import { CheckpointService } from "@/checkpoint/service"
 
 export const Event = SessionCompactionEvent
 
@@ -169,6 +170,7 @@ const layer = Layer.effect(
     const provider = yield* Provider.Service
     const events = yield* EventV2Bridge.Service
     const flags = yield* RuntimeFlags.Service
+    const checkpoint = yield* CheckpointService.Service
 
     const isOverflow = Effect.fn("SessionCompaction.isOverflow")(function* (input: {
       tokens: SessionV1.Assistant["tokens"]
@@ -513,6 +515,19 @@ const layer = Layer.effect(
       if (result === "continue") {
         yield* events.publish(Event.Compacted, { sessionID: input.sessionID })
       }
+
+      // Save checkpoint after compaction to preserve compacted state
+      yield* checkpoint
+        .save(input.sessionID, "compaction", {
+          messages: input.messages,
+          todos: [],
+          tokenUsage: { input: 0, output: 0, reasoning: 0 },
+          step: 0,
+          pendingToolCalls: [],
+          completedToolCalls: [],
+        })
+        .pipe(Effect.catch(() => Effect.void))
+
       return result
     })
 
@@ -554,7 +569,7 @@ const layer = Layer.effect(
 
 export const node = LayerNode.make({
   service: Service,
-  layer: layer,
+  layer: Layer.merge(layer, CheckpointService.layer),
   deps: [
     Config.node,
     Session.node,

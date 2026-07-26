@@ -57,6 +57,9 @@ import { SessionTable } from "@agenthorsy-ai/core/session/sql"
 import { SessionReminders } from "./reminders"
 import { SessionTools } from "./tools"
 import { LLMEvent } from "@agenthorsy-ai/llm"
+import { CheckpointService } from "@/checkpoint/service"
+import { shouldSnapshot } from "@/checkpoint/delta"
+import type { AgenthorsyChannelValues } from "@/checkpoint/serializer"
 
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -141,6 +144,7 @@ const layer = Layer.effect(
     const events = yield* EventV2Bridge.Service
     const flags = yield* RuntimeFlags.Service
     const database = yield* Database.Service
+    const checkpoint = yield* CheckpointService.Service
     const { db } = database
     const ops = Effect.fn("SessionPrompt.ops")(function* () {
       return {
@@ -1089,6 +1093,16 @@ const layer = Layer.effect(
         let preStopRetryCount = 0
         const MAX_PRESTOP_RETRIES = 3
 
+        // Resume from checkpoint if available
+        const agentType = session.agent ?? "general"
+        const savedState = yield* checkpoint.load(sessionID, agentType).pipe(
+          Effect.catch(() => Effect.succeed(null)),
+        )
+        if (savedState) {
+          step = savedState.step
+          yield* Effect.logInfo("resuming from checkpoint", { "session.id": sessionID, step })
+        }
+
         while (true) {
           yield* status.set(sessionID, { type: "busy" })
           yield* Effect.logInfo("loop", { "session.id": sessionID, step })
@@ -1367,6 +1381,25 @@ const layer = Layer.effect(
             Effect.onInterrupt(() => finalizeInterruptedAssistant),
           )
           if (outcome === "break") break
+
+          // Save checkpoint after successful turn
+          if (shouldSnapshot(step)) {
+            const msgs = yield* MessageV2.filterCompactedEffect(sessionID).pipe(
+              Effect.provideService(Database.Service, database),
+            )
+            const tokenUsage = handle.message.tokens ?? { input: 0, output: 0, reasoning: 0 }
+            yield* checkpoint
+              .save(sessionID, agentType, {
+                messages: msgs,
+                todos: [],
+                tokenUsage: { input: tokenUsage.input, output: tokenUsage.output, reasoning: tokenUsage.reasoning },
+                step,
+                pendingToolCalls: [],
+                completedToolCalls: [],
+              })
+              .pipe(Effect.catch(() => Effect.void))
+          }
+
           continue
         }
 
@@ -1637,7 +1670,7 @@ const quoteTrimRegex = /^["']|["']$/g
 
 export const node = LayerNode.make({
   service: Service,
-  layer: layer,
+  layer: Layer.merge(layer, CheckpointService.layer),
   deps: [
     SessionStatus.node,
     Session.node,
