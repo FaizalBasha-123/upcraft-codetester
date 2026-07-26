@@ -22,7 +22,22 @@ export type Result = { content: string; truncated: false } | { content: string; 
 export interface Options {
   maxLines?: number
   maxBytes?: number
-  direction?: "head" | "tail"
+  direction?: "head" | "tail" | "middle"
+}
+
+/**
+ * Middle-elide a string: keep the first `headCount` and last `tailCount` lines,
+ * elide everything in between. Used by compaction prune to degrade tool outputs
+ * progressively rather than binary compact/not-compact.
+ */
+export function middleElide(text: string, maxLines = 200): string {
+  const lines = text.split("\n")
+  if (lines.length <= maxLines) return text
+  const headCount = Math.floor(maxLines * 0.3)
+  const tailCount = maxLines - headCount
+  const head = lines.slice(0, headCount)
+  const tail = lines.slice(-tailCount)
+  return [...head, `... [${lines.length - headCount - tailCount} lines elided] ...`, ...tail].join("\n")
 }
 
 function hasTaskTool(agent?: Agent.Info) {
@@ -92,6 +107,11 @@ const layer = Layer.effect(
 
       if (lines.length <= maxLines && totalBytes <= maxBytes) {
         return { content: text, truncated: false } as const
+      }
+
+      if (direction === "middle") {
+        const elided = middleElide(text, maxLines)
+        return { content: elided, truncated: true, outputPath: "" } as const
       }
 
       const out: string[] = []

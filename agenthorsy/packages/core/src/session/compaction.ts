@@ -43,6 +43,11 @@ Rules:
 - Keep every section, even when empty.
 - Use terse bullets, not prose paragraphs.
 - Preserve exact file paths, symbols, commands, error strings, URLs, and identifiers when known.
+- Preserve error messages verbatim — include the full error string, stack trace, and any diagnostic output.
+- Preserve file diffs as unified diff format (file path, +/- lines with line numbers).
+- Preserve variable names, function names, class names, and type names exactly.
+- Preserve commands and their outputs exactly — include the command string and its result.
+- When summarizing tool outputs, extract the key facts (what changed, what failed, what was found) rather than dropping them.
 - Do not mention the summary process or that context was compacted.`
 
 type Entry = {

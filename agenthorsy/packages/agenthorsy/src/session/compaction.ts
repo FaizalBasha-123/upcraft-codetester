@@ -23,16 +23,20 @@ import { ModelV2 } from "@agenthorsy-ai/core/model"
 import { buildPrompt } from "@agenthorsy-ai/core/session/compaction"
 import { SessionCompactionEvent } from "@agenthorsy-ai/schema/session-compaction-event"
 import { CheckpointService } from "@/checkpoint/service"
+import { middleElide } from "@/tool/truncate"
 
 export const Event = SessionCompactionEvent
 
 export const PRUNE_MINIMUM = 20_000
 export const PRUNE_PROTECT = 40_000
 const TOOL_OUTPUT_MAX_CHARS = 2_000
-const PRUNE_PROTECTED_TOOLS = ["skill"]
+const PRUNE_PROTECTED_TOOLS = ["skill", "task"]
+const MIDDLE_ELIDE_TOOLS = ["bash", "shell", "execute"]
+const DEDUP_TOOLS = ["file_read", "read", "glob", "grep"]
 const DEFAULT_TAIL_TURNS = 2
 const MIN_PRESERVE_RECENT_TOKENS = 2_000
 const MAX_PRESERVE_RECENT_TOKENS = 8_000
+const MIDDLE_ELIDE_MAX_LINES = 200
 type Turn = {
   start: number
   end: number
@@ -83,6 +87,15 @@ function preserveRecentBudget(input: { cfg: ConfigV1.Info; model: Provider.Model
     input.cfg.compaction?.preserve_recent_tokens ??
     Math.min(MAX_PRESERVE_RECENT_TOKENS, Math.max(MIN_PRESERVE_RECENT_TOKENS, Math.floor(usable(input) * 0.25)))
   )
+}
+
+function simpleHash(str: string): string {
+  let hash = 0x811c9dc5
+  for (let i = 0; i < str.length; i++) {
+    hash ^= str.charCodeAt(i)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return (hash >>> 0).toString(36)
 }
 
 function turns(messages: SessionV1.WithParts[]) {
@@ -245,8 +258,12 @@ const layer = Layer.effect(
       }
     })
 
-    // goes backwards through parts until there are PRUNE_PROTECT tokens worth of tool
-    // calls, then erases output of older tool calls to free context space
+    // Priority-tiered tool output management:
+    // - Tier 1 (never compact): skill, task tools
+    // - Tier 2 (skip errors): error outputs always kept
+    // - Tier 3 (middle-elide): bash, shell, execute — degrade progressively
+    // - Tier 4 (dedup): file_read, read, glob, grep — track content hashes
+    // - Tier 5 (full clear): everything else
     const prune = Effect.fn("SessionCompaction.prune")(function* (input: { sessionID: SessionID }) {
       const cfg = yield* config.get()
       if (!cfg.compaction?.prune) return
@@ -259,8 +276,10 @@ const layer = Layer.effect(
 
       let total = 0
       let pruned = 0
-      const toPrune: SessionV1.ToolPart[] = []
+      const toFullCompact: SessionV1.ToolPart[] = []
+      const toMiddleElide: SessionV1.ToolPart[] = []
       let turns = 0
+      const seenHashes = new Set<string>()
 
       loop: for (let msgIndex = msgs.length - 1; msgIndex >= 0; msgIndex--) {
         const msg = msgs[msgIndex]
@@ -273,23 +292,55 @@ const layer = Layer.effect(
           if (part.state.status !== "completed") continue
           if (PRUNE_PROTECTED_TOOLS.includes(part.tool)) continue
           if (part.state.time.compacted) break loop
+
           const estimate = Token.estimate(part.state.output)
           total += estimate
           if (total <= PRUNE_PROTECT) continue
+
+          // Tier 3: middle-elide bash/shell outputs
+          if (MIDDLE_ELIDE_TOOLS.includes(part.tool)) {
+            pruned += estimate
+            toMiddleElide.push(part)
+            continue
+          }
+
+          // Tier 4: dedup file reads — track content hashes
+          if (DEDUP_TOOLS.includes(part.tool)) {
+            const hash = simpleHash(part.state.output)
+            if (seenHashes.has(hash)) {
+              pruned += estimate
+              toFullCompact.push(part)
+            } else {
+              seenHashes.add(hash)
+            }
+            continue
+          }
+
+          // Tier 5: full clear
           pruned += estimate
-          toPrune.push(part)
+          toFullCompact.push(part)
         }
       }
 
-      yield* Effect.logInfo("found", { pruned, total })
+      yield* Effect.logInfo("found", { pruned, total, middleElide: toMiddleElide.length, fullCompact: toFullCompact.length })
       if (pruned > PRUNE_MINIMUM) {
-        for (const part of toPrune) {
+        // Middle-elide: degrade output in-place instead of full compact
+        for (const part of toMiddleElide) {
+          if (part.state.status === "completed") {
+            const elided = middleElide(part.state.output, MIDDLE_ELIDE_MAX_LINES)
+            part.state.output = elided
+            part.state.time.compacted = Date.now()
+            yield* session.updatePart(part)
+          }
+        }
+        // Full compact: clear output entirely
+        for (const part of toFullCompact) {
           if (part.state.status === "completed") {
             part.state.time.compacted = Date.now()
             yield* session.updatePart(part)
           }
         }
-        yield* Effect.logInfo("pruned", { count: toPrune.length })
+        yield* Effect.logInfo("pruned", { count: toMiddleElide.length + toFullCompact.length })
       }
     })
 
