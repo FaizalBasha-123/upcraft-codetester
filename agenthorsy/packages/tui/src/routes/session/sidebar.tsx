@@ -33,7 +33,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const childAgentStatus = (sessionID: string) => {
     const messages = sync.data.message[sessionID] ?? []
     const allParts = messages.flatMap((m) => sync.data.part[m.id] ?? [])
-    const toolParts = allParts.filter((p) => p.type === "tool" && p.tool === "task") as Extract<typeof allParts[number], { type: "tool" }>[]
+    const toolParts = allParts.filter((p) => p.type === "tool" && p.tool === "task")
     const lastPart = toolParts[toolParts.length - 1]
     if (lastPart?.state.status === "running") return "running"
     if (lastPart?.state.status === "completed") return "completed"
@@ -129,7 +129,8 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                     return (
                       <box
                         gap={1}
-                        onMouseUp={() => navigate({ type: "session", sessionID: child.id })}
+                        cursor="pointer"
+                        onClick={() => navigate({ type: "session", sessionID: child.id })}
                       >
                         <text fg={theme.text}>
                           {statusIcon(status())} {description()}

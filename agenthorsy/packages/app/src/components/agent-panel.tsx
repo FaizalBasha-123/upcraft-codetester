@@ -2,8 +2,8 @@ import { createMemo, For, Show } from "solid-js"
 import { useSync } from "@/context/sync"
 import { useNavigate, useParams } from "@solidjs/router"
 import { useSDK } from "@/context/sdk"
-import { sessionHref, requireServerKey } from "@/utils/session-route"
-import type { Session, Part } from "@agenthorsy-ai/sdk/v2"
+import { sessionHref } from "@/utils/session-route"
+import type { Session } from "@agenthorsy-ai/sdk/v2"
 
 interface AgentTask {
   session: Session
@@ -33,7 +33,7 @@ export function AgentPanel(props: { onClose: () => void }) {
     return children.map((session, index) => {
       const messages = sync().data.message[session.id] ?? []
       const allParts = messages.flatMap((m) => sync().data.part[m.id] ?? [])
-      const toolParts = allParts.filter((p): p is Extract<Part, { type: "tool"; tool: string }> => p.type === "tool" && p.tool === "task")
+      const toolParts = allParts.filter((p) => p.type === "tool" && p.tool === "task")
 
       const lastToolPart = toolParts[toolParts.length - 1]
       const status = (() => {
@@ -63,8 +63,9 @@ export function AgentPanel(props: { onClose: () => void }) {
   })
 
   const navigateToSession = (sessionID: string) => {
-    if (params.serverKey) {
-      navigate(sessionHref(requireServerKey(params.serverKey), sessionID))
+    const server = sdk().serverKey
+    if (server) {
+      navigate(sessionHref(server, sessionID))
       return
     }
     const dir = sdk().directory
@@ -130,7 +131,7 @@ export function AgentPanel(props: { onClose: () => void }) {
               </div>
             </div>
           )}
-        </For>
+        </Show>
       </div>
 
       <div class="px-4 py-3 border-t border-v2-border-border-base">

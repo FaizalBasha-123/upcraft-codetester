@@ -2191,7 +2191,7 @@ ToolRegistry.register({
 
     return (
       <BasicTool
-        icon="brain"
+        icon="orchestrator_task"
         status={props.status}
         trigger={trigger()}
         hideDetails
