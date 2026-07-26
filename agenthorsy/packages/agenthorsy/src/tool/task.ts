@@ -14,6 +14,7 @@ import { Effect, Exit, Schema, Scope } from "effect"
 import { EffectBridge } from "@/effect/bridge"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { Database } from "@agenthorsy-ai/core/database/database"
+import { CheckpointService } from "@/checkpoint/service"
 
 export interface TaskPromptOps {
   cancel(sessionID: SessionID): Effect.Effect<void>
@@ -88,6 +89,7 @@ export const TaskTool = Tool.define(
     const scope = yield* Scope.Scope
     const flags = yield* RuntimeFlags.Service
     const database = yield* Database.Service
+    const checkpoint = yield* CheckpointService.Service
 
     const run = Effect.fn("TaskTool.execute")(function* (
       params: Schema.Schema.Type<typeof Parameters>,
@@ -210,6 +212,22 @@ export const TaskTool = Tool.define(
           agent: next.name,
           parts,
         })
+
+        // Save checkpoint after subagent completes
+        const msgs = yield* MessageV2.filterCompactedEffect(nextSession.id).pipe(
+          Effect.provideService(Database.Service, database),
+        )
+        yield* checkpoint
+          .save(nextSession.id, "child", {
+            messages: msgs,
+            todos: [],
+            tokenUsage: { input: 0, output: 0, reasoning: 0 },
+            step: 0,
+            pendingToolCalls: [],
+            completedToolCalls: [],
+          })
+          .pipe(Effect.catch(() => Effect.void))
+
         return result.parts.findLast((item) => item.type === "text")?.text ?? ""
       })
 

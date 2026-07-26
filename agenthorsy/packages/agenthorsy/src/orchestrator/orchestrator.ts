@@ -13,6 +13,9 @@ import { Token } from "@/util/token"
 import { Config } from "@/config/config"
 import { usable } from "@/session/overflow"
 import { ConfigV1 } from "@agenthorsy-ai/core/v1/config/config"
+import { CheckpointService } from "@/checkpoint/service"
+import { shouldSnapshot } from "@/checkpoint/delta"
+import type { AgenthorsyChannelValues } from "@/checkpoint/serializer"
 
 type WorktreeMethods = Pick<Worktree.Interface, "list" | "create">
 type TodoMethods = Pick<Todo.Interface, "get">
@@ -345,6 +348,13 @@ export const loop = Effect.fn("Orchestrator.loop")(function* (
   const todoService = yield* Todo.Service
   const config = yield* Config.Service
   const provider = yield* Provider.Service
+  const checkpoint = yield* CheckpointService.Service
+
+  // Resume from checkpoint if available
+  const savedState = yield* checkpoint.load(sessionID, "orchestrator").pipe(
+    Effect.catch(() => Effect.succeed(null)),
+  )
+  const startTaskIndex = savedState?.currentTaskIndex ?? 0
 
   const orchestratorSession = yield* sessions.get(sessionID).pipe(Effect.orDie)
   const allMsgs = yield* sessions.messages({ sessionID }).pipe(Effect.orDie)
@@ -371,10 +381,27 @@ export const loop = Effect.fn("Orchestrator.loop")(function* (
   const tasks = decomposeTasks(taskDescription)
   const metadata = (orchestratorSession.metadata as OrchestratorMetadata) || { tasks: [] }
 
-  const results: SessionV1.WithParts[] = []
+  const results: SessionV1.WithParts[] = savedState?.results
+    ? (savedState.results as any[])
+    : []
 
-  for (let i = 0; i < tasks.length; i++) {
+  for (let i = startTaskIndex; i < tasks.length; i++) {
     const task = tasks[i]
+
+    // Save checkpoint before starting task
+    yield* checkpoint
+      .save(sessionID, "orchestrator", {
+        messages: allMsgs,
+        todos: [],
+        tokenUsage: { input: 0, output: 0, reasoning: 0 },
+        step: i,
+        pendingToolCalls: [],
+        completedToolCalls: [],
+        orchestratorMetadata: metadata as unknown as Record<string, unknown>,
+        currentTaskIndex: i,
+        results: results as any,
+      })
+      .pipe(Effect.catch(() => Effect.void))
 
     // Pre-task overflow check — compact before starting task if orchestrator session is near overflow
     {
@@ -428,6 +455,21 @@ export const loop = Effect.fn("Orchestrator.loop")(function* (
       ),
     )
     results.push(result)
+
+    // Save checkpoint after task completes
+    yield* checkpoint
+      .save(sessionID, "orchestrator", {
+        messages: yield* sessions.messages({ sessionID }).pipe(Effect.orDie),
+        todos: [],
+        tokenUsage: { input: 0, output: 0, reasoning: 0 },
+        step: i + 1,
+        pendingToolCalls: [],
+        completedToolCalls: [],
+        orchestratorMetadata: metadata as unknown as Record<string, unknown>,
+        currentTaskIndex: i + 1,
+        results: results as any,
+      })
+      .pipe(Effect.catch(() => Effect.void))
 
     // Extract completion data from agent's final response
     const completionSummary = extractText(result).slice(0, 2000)
