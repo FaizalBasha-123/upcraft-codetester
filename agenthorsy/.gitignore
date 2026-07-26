@@ -1,8 +1,10 @@
 .DS_Store
 node_modules
+bower_components
 .worktrees
 .sst
 .env
+.env.*
 .env.local
 .idea
 .vscode
@@ -10,8 +12,12 @@ node_modules
 *~
 playground
 tmp
+temp
+.cache
 dist
 ts-dist
+build
+*.tsbuildinfo
 .turbo
 **/.serena
 .serena/
@@ -25,6 +31,7 @@ a.out
 target
 .scripts
 .direnv/
+scripts
 
 # Local dev files
 opencode-dev
@@ -48,19 +55,13 @@ Thumbs.db
 *.swp
 
 # Nested git repos (tracked independently)
-deepagents/
-grok-build/
-horsy/
-oh-my-openagent/
-opencode-repo/
-shannon/
-strix/
-upcraft-pentester/
-agenthorsy/agenthorsy/
-architecture/
-.agents/
-omo-system-design.md
-opencode-system-design.md
+deepagents/.git
+grok-build/.git
+horsy/.git
+oh-my-openagent/.git
+opencode-repo/.git
+shannon/.git
+strix/.git
 .git_backup
 
 # Aider

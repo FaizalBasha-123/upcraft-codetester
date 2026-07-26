@@ -1,0 +1,34 @@
+C4Context
+    title Shannon System Context — AI-Driven Security Testing Framework
+
+    Person(user, "Security Engineer", "Triggers a pentest via CLI or Docker")
+
+    System_Ext(target, "Target Web App", "Staging environment under test")
+    System_Ext(repo, "Source Code Repo", "Target application source code")
+    System_Ext(llm, "LLM Providers", "Anthropic API / Bedrock / Vertex / LiteLLM")
+    System_Ext(sast, "SAST Scanner", "External static analysis findings (optional)")
+
+    Boundary(shannon, "Shannon System", "Code analysis and testing framework") {
+        System(cli, "CLI Entry", "TypeScript CLI / Docker\nTriggers Temporal workflow")
+        System(temporal, "Temporal Orchestrator", "Workflow engine\nState machine + retry + resume")
+        System(agents, "Agent System", "13 ephemeral AI agents\n5 phases, parallel execution")
+        System(mcp, "MCP Collectors", "4 Zod-validated data sinks\n21 tools total")
+        System(ai, "AI Execution Engine", "Claude Code SDK integration\nModel tiering + message dispatch")
+        System(audit, "Audit & Metrics", "Session logs, cost tracking\nGit checkpoints, deliverables")
+        System(guard, "Guardrails", "Queue validation, ID checks\nSpending cap, schema enforcement")
+    }
+
+    Rel(user, cli, "Starts pentest with\nwebUrl + repoPath + config")
+    Rel(cli, temporal, "Sends PipelineInput\nvia Temporal SDK")
+    Rel(temporal, agents, "Orchestrates 13 agents\nacross 5 phases")
+    Rel(agents, mcp, "Writes findings via\none-shot MCP tools")
+    Rel(agents, ai, "Executes via\nclaude-agent-sdk query()")
+    Rel(agents, repo, "Reads source code\n(file ops, grep)")
+    Rel(ai, llm, "Streams messages\nwith MCP servers attached")
+    Rel(temporal, audit, "Logs progress,\nmetrics, checkpoints")
+    Rel(temporal, guard, "Validates queues,\ncontrols exploit gate")
+    Rel(sast, guard, "Injects external\nfindings into queue")
+    Rel(agents, target, "Playwright browser\nactions during exploit")
+    Rel(audit, user, "Deliverables:\nreports, evidence, logs")
+
+    UpdateLayoutConfig($c4ShapeInRow="3", $c4BoundaryInRow="1")

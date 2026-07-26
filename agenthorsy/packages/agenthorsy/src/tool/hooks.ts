@@ -117,7 +117,7 @@ function matchesMatcher(toolID: string, matcher?: string): boolean {
   return patterns.some((p) => toolID.includes(p.trim()))
 }
 
-function runCommand(command: string, cwd: string): Effect.Effect<{ exitCode: number; stderr: string }> {
+function runCommand(command: string, cwd: string): Effect.Effect<{ exitCode: number; stderr: string }, never, AppProcess.Service> {
   return Effect.gen(function* () {
     const appProcess = yield* AppProcess.Service
     const result = yield* appProcess
@@ -139,14 +139,15 @@ function getWorktree(): Effect.Effect<string> {
   return InstanceState.context.pipe(Effect.map((ctx) => ctx.worktree))
 }
 
-function getConfigHooks(): Effect.Effect<Hook[]> {
+function getConfigHooks(): Effect.Effect<Hook[], never, Config.Service> {
   return Effect.gen(function* () {
-    const config = yield* Config.get()
-    return loadConfigHooks(config)
+    const config = yield* Config.Service
+    const cfg = yield* config.get()
+    return loadConfigHooks(cfg)
   }).pipe(Effect.catch(() => Effect.succeed([])))
 }
 
-export function runPostToolUseHooks(toolID: string): Effect.Effect<HookResult> {
+export function runPostToolUseHooks(toolID: string): Effect.Effect<HookResult, never, AppProcess.Service | Config.Service> {
   return Effect.gen(function* () {
     const worktree = yield* getWorktree()
     const configHooks = yield* getConfigHooks()
@@ -166,7 +167,7 @@ export function runPostToolUseHooks(toolID: string): Effect.Effect<HookResult> {
   })
 }
 
-export function runPreStopHooks(): Effect.Effect<HookResult> {
+export function runPreStopHooks(): Effect.Effect<HookResult, never, AppProcess.Service | Config.Service> {
   return Effect.gen(function* () {
     const worktree = yield* getWorktree()
     const configHooks = yield* getConfigHooks()

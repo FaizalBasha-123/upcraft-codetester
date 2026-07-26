@@ -36,6 +36,8 @@ interface OrchestratorMetadata {
 
 type TaskMarkerStatus = "running" | "completed" | "error"
 
+const CONTEXT_USAGE_THRESHOLD = 0.75
+
 const ORCHESTRATOR_COMPACTION_PROMPT = `You are an orchestrator compaction assistant. Summarize the following delegation history into a concise anchor.
 
 ## Objective
@@ -377,9 +379,8 @@ export const loop = Effect.fn("Orchestrator.loop")(function* (
     // Pre-task overflow check — compact before starting task if orchestrator session is near overflow
     {
       const freshMsgs = yield* sessions.messages({ sessionID }).pipe(Effect.orDie)
-      const freshSession = yield* sessions.get(sessionID).pipe(Effect.orDie)
       const cfg = yield* config.get()
-      const model = yield* resolveModelFromSession(freshSession.model, cfg.model, provider)
+      const model = yield* resolveModelFromSession(orchestratorSession.model, cfg.model, provider)
       if (model) {
         const tokens = yield* estimateContextUsage(freshMsgs, model, compaction)
         if (isOrchestratorOverflow(tokens, cfg, model)) {
@@ -837,6 +838,6 @@ function compactIfNeeded(
     const usage = yield* estimateContextUsage(freshMsgs, model, compaction)
     if (!isOrchestratorOverflow(usage, cfg, model)) return
 
-    yield* compactOrchestratorSession(sessionID, sessions, compaction, config, provider, `end-of-loop overflow (${usage} tokens)`)
+    yield* compactOrchestratorSession(sessionID, sessions, compaction, config, provider, `end-of-loop context at ${(usage * 100).toFixed(0)}%`)
   })
 }

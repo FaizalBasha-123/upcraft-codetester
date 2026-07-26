@@ -12,7 +12,6 @@ import { ProviderTransform } from "@/provider/transform"
 import PROMPT_GENERATE from "./generate.txt"
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
-import PROMPT_VALIDATOR from "./prompt/validator.txt"
 import PROMPT_SUMMARY from "./prompt/summary.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
 import { Permission } from "@/permission"
@@ -252,12 +251,11 @@ const layer = Layer.effect(
                 question: "allow",
                 plan_exit: "allow",
                 switch_mode: "allow",
-                validate_task: "deny",
-                merge_worktree: "deny",
+                validate_task: "allow",
+                merge_worktree: "allow",
                 task: {
                   explore: "allow",
                   general: "allow",
-                  validator: "allow",
                 },
                 external_directory: {
                   [path.join(Global.Path.data, "plans", "*")]: "allow",
@@ -305,27 +303,6 @@ const layer = Layer.effect(
               user,
             ),
             prompt: PROMPT_SUMMARY,
-          },
-          validator: {
-            name: "validator",
-            description:
-              "Read-only validation agent. Verifies code correctness against plan, runs builds/tests, checks AST syntax. Spawned by child agents after build phase.",
-            options: {},
-            prompt: PROMPT_VALIDATOR,
-            permission: Permission.merge(
-              defaults,
-              Permission.fromConfig({
-                "*": "deny",
-                bash: "allow",
-                read: "allow",
-                glob: "allow",
-                grep: "allow",
-              }),
-              user,
-            ),
-            mode: "subagent",
-            native: true,
-            hidden: true,
           },
         }
 
