@@ -38,7 +38,7 @@ import { ApplyPatchTool } from "./apply_patch"
 import { Glob } from "@agenthorsy-ai/core/util/glob"
 import path from "path"
 import { pathToFileURL } from "url"
-import { Effect, Layer, Context } from "effect"
+import { Effect, Layer, Context, Option } from "effect"
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner"
 import { CrossSpawnSpawner } from "@agenthorsy-ai/core/cross-spawn-spawner"
 import { Format } from "../format"
@@ -194,8 +194,21 @@ const layer = Layer.effect(
           const namespace = path.basename(match, path.extname(match))
           // `match` is an absolute filesystem path from `Glob.scanSync(..., { absolute: true })`.
           // Import it as `file://` so Node on Windows accepts the dynamic import.
-          const mod = yield* Effect.promise(() => import(pathToFileURL(match).href))
-          for (const [id, def] of Object.entries(mod)) {
+          // Skip tools that fail to load so one broken custom tool cannot block every prompt.
+          const loaded = yield* Effect.tryPromise({
+            try: () => import(pathToFileURL(match).href),
+            catch: (error) => error,
+          }).pipe(
+            Effect.tapError((error) =>
+              Effect.logError("failed to load custom tool", {
+                tool: match,
+                error: error instanceof Error ? error.message : String(error),
+              }),
+            ),
+            Effect.option,
+          )
+          if (Option.isNone(loaded)) continue
+          for (const [id, def] of Object.entries(loaded.value)) {
             if (!isPluginTool(def)) continue
             custom.push(fromPlugin(id === "default" ? namespace : `${namespace}_${id}`, def))
           }

@@ -126,7 +126,7 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
             )
             // PostToolUse hook — run lint/typecheck after edit/write/shell
             const hookResult = yield* runPostToolUseHooks(item.id).pipe(
-              Effect.catch(() => Effect.succeed({ blocked: false, replacement: undefined, feedback: undefined } satisfies import("@/tool/hooks").HookResult)),
+              Effect.catch(() => Effect.succeed({ blocked: false } satisfies import("@/tool/hooks").HookResult)),
             )
             if (hookResult.replacement) {
               return { ...output, output: hookResult.replacement }
